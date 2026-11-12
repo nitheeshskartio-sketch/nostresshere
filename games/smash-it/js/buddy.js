@@ -51,6 +51,7 @@
     dance: ["Watch these moves!", "Party time!"],
     yawn: ["*yawn*", "So sleepy…"],
     pancake: ["I'm a pancake!", "Flat as a…", "Squished!"],
+    sever: ["My arm!", "I was using that!", "It's just a flesh wound!", "That's not coming back, is it?", "Who needs two legs anyway?", "Can I get that back?", "Okay, now you're just showing off."],
     brutal: ["That's gonna leave a mark!", "My spleen!", "I need a doctor!", "Not cool!", "Call my lawyer!", "Ow, my everything!", "Was that a sledgehammer?!", "I felt that in my soul!"]
   };
   S.LINES = LINES;
@@ -222,6 +223,20 @@
         return [hp, kn];
       };
       const [hipL, knL] = leg(1), [hipR, knR] = leg(-1);
+
+      // limbs that can come off in Brutal mode
+      this.limbs = {
+        armL: { g: shL, joints: ["shL", "elL"], kind: "arm", parent: spineG },
+        armR: { g: shR, joints: ["shR", "elR"], kind: "arm", parent: spineG },
+        legL: { g: hipL, joints: ["hipL", "knL"], kind: "leg", parent: body },
+        legR: { g: hipR, joints: ["hipR", "knR"], kind: "leg", parent: body }
+      };
+      for (const k in this.limbs) {
+        const L = this.limbs[k];
+        L.meshes = []; L.hp = 34;
+        L.g.traverse((o) => { if (o.isMesh && o.userData.part) L.meshes.push(o); });
+      }
+      this.lost = new Set(); this.lostJoints = new Set(); this.bleeds = [];
 
       // joints
       const J = (this.j = {
@@ -450,31 +465,96 @@
 
       // facial reaction + voice
       if (!this.dead) this.pickReaction(p, o);
-      // Brutal mode: health
-      this.damage(o.dmg != null ? o.dmg : p * (o.part === "head" ? 1.4 : 1), o.tool && o.tool.id);
+      // Brutal mode: limbs take damage and can come off
+      if (this.brutal) {
+        const lp = o.point.clone().sub(this.com).applyQuaternion(this.invQuat());
+        const dmg = o.dmg != null ? o.dmg : p;
+        if (o.part === "arm" || o.part === "leg") this.hurtLimb(o.part + (lp.x > 0 ? "L" : "R"), dmg, d, p);
+        else if (p >= 11 && Math.random() < 0.35) this.hurtLimb(pick(Object.keys(this.limbs)), dmg, d, p);
+      }
       return p;
     }
 
-    /* ---------- health (Brutal mode only) ---------- */
-    damage(n, src) {
-      if (!this.brutal || this.dead || !(n > 0)) return;
-      this.health = Math.max(0, this.health - n);
-      S.bus.emit("health", this.health);
-      if (this.health <= 0) this.die(src);
+    /* ---------- Brutal mode: wounds & lost limbs (no health — the buddy never dies) ---------- */
+    damage() {}
+    legsLost() { return (this.lost.has("legL") ? 1 : 0) + (this.lost.has("legR") ? 1 : 0); }
+    hurtLimb(key, dmg, dir, p) {
+      if (!this.brutal) return;
+      const L = this.limbs[key];
+      if (!L || this.lost.has(key)) return;
+      L.hp -= dmg;
+      if (L.hp <= 0) this.sever(key, dir || new V3(0, 0, -1), p || 10);
     }
-    die(src) {
-      this.dead = true;
-      this.emote = null; this.dizzy = 0; this.spinV = 0;
-      this.burn = Math.min(this.burn, 1.5);
-      this.face.setExpression("ko", 1e9);
-      if (this.state === "stand" || this.state === "getup" || this.state === "shake") this.toFly(new V3(0, 1.5, 0), true);
-      S.bus.emit("say", "Ugh… 💫");
-      S.bus.emit("death", { src });
+    blast(pos, radius, power) {
+      for (const k in this.limbs) {
+        if (this.lost.has(k)) continue;
+        const wp = this.limbs[k].g.getWorldPosition(new V3());
+        const d = wp.distanceTo(pos);
+        if (d < radius) this.hurtLimb(k, power * (1 - d / radius) * 5, wp.sub(pos).normalize(), power);
+      }
     }
-    revive() {
-      this.dead = false; this.health = 100; this.burn = 0; this.soak = 0;
-      this.reset();
-      S.bus.emit("health", 100);
+    sever(key, dir, p) {
+      const L = this.limbs[key], W = this.world;
+      this.lost.add(key);
+      L.joints.forEach((j) => this.lostJoints.add(j));
+      this.hitMeshes = this.hitMeshes.filter((m) => !L.meshes.includes(m));
+      const g = L.g;
+      g.updateWorldMatrix(true, true);
+      const pos = g.getWorldPosition(new V3()), quat = g.getWorldQuaternion(new Q()), scl = g.getWorldScale(new V3());
+      // the wound left on the body
+      const fleshMat = new THREE.MeshStandardMaterial({ color: "#7a0c0c", roughness: 0.3 });
+      const boneMat = new THREE.MeshStandardMaterial({ color: "#efe3c8", roughness: 0.6 });
+      const makeStump = () => {
+        const st = new THREE.Group();
+        const f = new THREE.Mesh(new THREE.SphereGeometry(L.kind === "arm" ? 0.082 : 0.105, 16, 12), fleshMat); f.scale.y = 0.6; st.add(f);
+        const b = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.026, 0.06, 10), boneMat); b.position.y = -0.04; st.add(b);
+        return st;
+      };
+      const stump = makeStump(); stump.position.copy(g.position); L.parent.add(stump);
+      // the limb flies off as a physics object you can keep knocking around
+      L.parent.remove(g);
+      g.position.set(0, 0, 0); g.quaternion.identity(); g.scale.copy(scl);
+      const cap = makeStump(); cap.rotation.x = Math.PI; g.add(cap);
+      const len = L.kind === "arm" ? 0.7 : 0.95, rad = L.kind === "arm" ? 0.085 : 0.1;
+      const prop = W.addProp({ kind: "limb", mesh: g, shapes: [0.15, 0.42, 0.68].map((f) => [new CANNON.Sphere(rad), new CANNON.Vec3(0, -len * f, 0)]), mass: L.kind === "arm" ? 2 : 3.5, pos: [pos.x, pos.y, pos.z], damp: 0.25, adamp: 0.35, color: "#8a0e0e" });
+      prop.body.quaternion.set(quat.x, quat.y, quat.z, quat.w); g.quaternion.copy(quat);
+      const v = dir.clone().multiplyScalar(2 + p * 0.3).add(new V3(R(-1, 1), 2.5 + p * 0.15, R(-1, 1)));
+      prop.body.velocity.set(v.x, v.y, v.z);
+      prop.body.angularVelocity.set(R(-8, 8), R(-8, 8), R(-8, 8));
+      this.bleeds.push({ obj: stump, t: 6, acc: 0 }, { obj: cap, t: 3.5, acc: 0 });
+      // blood everywhere
+      W.splash(pos, "#9b0000", 45, 4.5, 0.032);
+      W.floorSplat(new V3(pos.x, 0, pos.z), "#7a0010", 1.1);
+      W.shake(10); W.slowmo(0.6);
+      S.audio.play("crunch", 14); S.audio.play("splat");
+      this.face.injure(10);
+      this.react(L.kind === "arm" ? "cry" : "scared", 2.2, "sever");
+      S.bus.emit("sever", { key });
+      if (L.kind === "leg" && (this.state === "stand" || this.state === "getup")) { this.toFly(new V3(R(-1, 1), 1.5, R(-0.5, 0.5)), true); this.angVel.set(R(-3, 3), 0, R(-3, 3)); }
+    }
+    restore() {
+      const W = this.world;
+      for (const pr of W.props.filter((x) => x.kind === "limb")) { W.propGroup.remove(pr.mesh); W.physics.removeBody(pr.body); }
+      W.props = W.props.filter((x) => x.kind !== "limb");
+      this.build();
+    }
+    revive() { this.restore(); this.reset(); }
+    updateBleeding(dt) {
+      const W = this.world;
+      for (const b of this.bleeds) {
+        if (b.t <= 0 || !b.obj.parent) continue;
+        b.t -= dt; b.acc += dt;
+        if (b.acc < 0.05) continue;
+        b.acc = 0;
+        const wp = b.obj.getWorldPosition(new V3());
+        const k = Math.min(1, b.t / 4) * 1.6 + 0.3;
+        W.fx.drop.spawn({
+          pos: wp, vel: new V3(R(-1.2, 1.2), R(0.3, 2.2), R(-1.2, 1.2)).multiplyScalar(k), size: R(0.012, 0.024), life: 1.4,
+          color: pick(["#9b0000", "#b3001b", "#7a0010"]), stretch: 0.6,
+          hit: (pt) => { if (pt.pos.y < 0.03) { if (Math.random() < 0.3) W.floorSplat(pt.pos, "#7a0010", R(0.16, 0.34)); return true; } return false; }
+        });
+      }
+      this.bleeds = this.bleeds.filter((b) => b.t > 0);
     }
 
     pickReaction(p, o) {
@@ -569,9 +649,9 @@
     }
 
     /* ---------- decals (mess stuck to the body) ---------- */
-    addDecal(mesh, point, normal, color, size) {
-      if (!mesh || mesh === this.faceMesh) return;
-      const mat = new THREE.MeshStandardMaterial({ map: pick(S.splatTex), color, transparent: true, depthWrite: false, roughness: 0.35, polygonOffset: true, polygonOffsetFactor: -4 });
+    addDecal(mesh, point, normal, color, size, tex) {
+      if (!mesh || mesh === this.faceMesh || !mesh.parent) return;
+      const mat = new THREE.MeshStandardMaterial({ map: tex || pick(S.splatTex), color, transparent: true, depthWrite: false, roughness: 0.35, polygonOffset: true, polygonOffsetFactor: -4 });
       const d = new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
       const inv = mesh.getWorldQuaternion(new Q()).invert();
       const ws = mesh.getWorldScale(new V3());
@@ -636,7 +716,8 @@
       if (acc.length() > 140) acc.setLength(140);
       const Aloc = acc.add(new V3(0, G * this.gravMul, 0)).applyQuaternion(this.invQuat());
       this.setPose(dt);
-      for (const k in this.j) this.j[k].step(dt, Aloc);
+      for (const k in this.j) if (!this.lostJoints.has(k)) this.j[k].step(dt, Aloc);
+      if (this.bleeds.length) this.updateBleeding(dt);
       for (const c of this.chains) c.step(dt, Aloc);
 
       // squash springs
@@ -674,6 +755,7 @@
     }
 
     updateStand(dt) {
+      if (this.legsLost()) { this.toFly(new V3(R(-0.5, 0.5), 0.6, R(-0.5, 0.5)), true); this.angVel.set(R(-2, 2), 0, R(-2, 2)); return; }
       const L = this.lean;
       const k = 30, c = 4.2;
       L.vx += (-k * L.x - c * L.vx) * dt; L.vz += (-k * L.z - c * L.vz) * dt;
@@ -774,7 +856,7 @@
             if (sp > 8) { this.dizzy = 2.5; this.world.slowmo(0.35); }
             S.bus.emit("land", { soft: false, height: this.maxY, speed: sp });
             // land on the feet if mostly upright
-            if (up.y > 0.8 && sp < 8 && !this.dead) {
+            if (up.y > 0.8 && sp < 8 && !this.dead && !this.legsLost()) {
               this.feet.set(this.com.x, 0, this.com.z);
               this.setState("stand");
               this.lean.vx = v.z * 0.4; this.lean.vz = -v.x * 0.4; this.lean.x = this.lean.z = 0;
@@ -801,7 +883,7 @@
       this.com.y += (0.24 - this.com.y) * Math.min(1, dt * 8);
       this.com.x += this.vel.x * dt; this.com.z += this.vel.z * dt;
       this.vel.multiplyScalar(Math.exp(-5 * dt));
-      if (this.stateT > this.downFor && !this.dead) {
+      if (this.stateT > this.downFor && !this.dead && !this.legsLost()) {
         this.setState("getup");
         this.getupFrom = { q: this.quat.clone(), y: this.com.y };
         this.getupYaw = this.yawToCamera();

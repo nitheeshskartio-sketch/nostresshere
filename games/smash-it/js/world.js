@@ -46,6 +46,17 @@
     for (let i = 0; i < 9; i++) { const a = R(0, 6.28), d = R(80, 118); c.beginPath(); c.arc(128 + Math.cos(a) * d, 128 + Math.sin(a) * d, R(4, 11), 0, 7); c.fill(); }
   }));
 
+  // gash wound (Brutal mode)
+  S.gashTex = tex(256, 128, (c) => {
+    c.translate(128, 64);
+    c.fillStyle = "rgba(140,10,10,0.55)"; c.beginPath(); c.ellipse(0, 0, 110, 34, 0, 0, 7); c.fill();
+    c.fillStyle = "#4a0006"; c.beginPath(); c.moveTo(-100, 0);
+    for (let x = -100; x <= 100; x += 12) c.lineTo(x, -6 - Math.random() * 7 + Math.abs(x) * 0.05);
+    for (let x = 100; x >= -100; x -= 12) c.lineTo(x, 6 + Math.random() * 7 - Math.abs(x) * 0.05);
+    c.fill();
+    c.fillStyle = "#b3001b"; for (let i = 0; i < 6; i++) c.fillRect(-80 + i * 30 + Math.random() * 10, 8, 5, 18 + Math.random() * 26);
+  });
+
   /* =========================================================
      PARTICLES (instanced, shrink to fade)
      ========================================================= */

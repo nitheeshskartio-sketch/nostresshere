@@ -273,6 +273,7 @@
     { id: "launch", icon: "🚀", name: "Launch" },
     { id: "dance", icon: "💃", name: "Dance" },
     { id: "clean", icon: "🧼", name: "Clean up" },
+    { id: "heal", icon: "🩹", name: "Patch up" },
     { id: "slowmo", icon: "🐢", name: "Slow-mo" }
   ];
   $("actions").innerHTML = ACTIONS.map((a) => '<button type="button" class="act" data-act="' + a.id + '" title="' + a.name + '"><span>' + a.icon + '</span><small>' + a.name + "</small></button>").join("");
@@ -280,7 +281,8 @@
     const b = e.target.closest(".act"); if (!b) return;
     S.audio.unlock();
     const a = b.dataset.act;
-    if (a === "clean") { buddy.cleanAll(); world.clearFloor(); S.audio.play("splash"); toast("🧼 Squeaky clean. For now."); }
+    if (a === "heal") { tools.clear(); brutal.clear(); buddy.revive(); applyStyle(); world.clearFloor(); S.audio.play("unlock"); toast("🩹 All patched up. Good as new. Mostly."); }
+    else if (a === "clean") { buddy.cleanAll(); world.clearFloor(); S.audio.play("splash"); toast("🧼 Squeaky clean. For now."); }
     else if (a === "slowmo") { world.slowT = 3.2; toast("🐢 Slooooow mooootion…"); }
     else { buddy.action(a); if (a === "launch") S.bus.emit("fall", {}); }
     hideHint();
@@ -309,8 +311,7 @@
   renderSound();
 
   function resetAll() {
-    tools.clear(); brutal.clear(); if (buddy.dead || buddy.health < 100) buddy.revive(); else buddy.reset(); world.spawnProps(); world.clearFloor();
-    $("modal").hidden = true; ko.hits = 0; ko.start = performance.now();
+    tools.clear(); brutal.clear(); buddy.restore(); applyStyle(); buddy.reset(); world.spawnProps(); world.clearFloor();
     for (const k in world.fx) world.fx[k].clear();
     world.orbit.az = 0; world.orbit.el = 0.12;
     toast("↺ Fresh start! Like nothing ever happened.");
@@ -699,44 +700,13 @@
      LOOP
      ========================================================= */
   /* =========================================================
-     HEALTH & K.O. (Brutal mode)
-     ========================================================= */
-  const ko = { hits: 0, start: performance.now(), last: null };
-  S.bus.on("hit", (d) => { if (prefs.violence === "brutal" && !buddy.dead) { ko.hits++; ko.last = d.tool; } });
-  S.bus.on("health", (hp) => {
-    $("hpFill").style.width = hp + "%";
-    $("hpVal").textContent = Math.ceil(hp);
-    $("hp").classList.toggle("low", hp < 30);
-    $("hp").classList.remove("hurt"); void $("hp").offsetWidth; $("hp").classList.add("hurt");
-  });
-  S.bus.on("death", (d) => {
-    const secs = Math.round((performance.now() - ko.start) / 1000);
-    const t = S.toolById(d.src || ko.last) || { icon: "🔥", name: d.src === "fire" ? "Fire" : d.src === "gas" ? "Gas explosion" : "Pure chaos" };
-    setTimeout(() => {
-      if (!buddy.dead) return;
-      $("modalCard").innerHTML = '<div class="res-emoji">💀</div><h2>K.O.!</h2><p class="muted">The buddy has left the building. (Don\'t worry — they respawn. They always respawn.)</p>' +
-        '<div class="res-grid"><div><b>' + ko.hits + '</b><span>hits</span></div><div><b>' + secs + 's</b><span>survived</span></div><div><b>' + t.icon + '</b><span>finisher</span></div><div><b>0</b><span>health</span></div></div>' +
-        '<p>Finishing move: <b>' + t.icon + " " + t.name + '</b></p>' +
-        '<div class="row center"><button class="btn primary" data-k="again">▶ Play again</button><button class="btn" data-k="normal">😇 Normal mode</button></div>';
-      $("modal").hidden = false;
-      $("modalCard").querySelectorAll("[data-k]").forEach((b) => b.addEventListener("click", () => {
-        $("modal").hidden = true;
-        if (b.dataset.k === "normal") setViolence("normal");
-        resetAll();
-        buddy.react("happy", 2, pick(["I'm back, baby!", "Did I miss anything?", "Round two? Seriously?"]));
-      }));
-    }, 2600);
-  });
-
-  /* =========================================================
      NORMAL / BRUTAL
      ========================================================= */
   function setViolence(v) {
     prefs.violence = v; save();
     const brutal = v === "brutal";
     face.suppress = brutal; face.dirty = true; face.photoDirty = true;
-    $("hp").hidden = !brutal;
-    if (!brutal) { S.brutal.clear(); if (buddy.dead) buddy.revive(); }
+    if (!brutal) { S.brutal.clear(); if (buddy.lost.size) { buddy.revive(); applyStyle(); } }
     buddy.brutal = brutal; buddy.refreshFace();
     document.body.classList.toggle("brutal", brutal);
     $("vNormal").classList.toggle("on", !brutal); $("vBrutal").classList.toggle("on", brutal);
@@ -751,7 +721,7 @@
     if (prefs.violence === "brutal") return;
     const go = () => { setViolence("brutal"); toast("😈 Brutal mode — cartoon buddy only."); buddy.react("scared", 1.6, "Uh oh. Where did you get a sledgehammer?"); };
     if (prefs.brutalOk) return go();
-    $("modalCard").innerHTML = '<div class="res-emoji">😈</div><h2>Brutal mode</h2><p>Rougher weapons — sledgehammer, bat, frying pan, bricks, dynamite, anvils — with <b>cartoon blood and bruises</b>.</p><p class="muted">Photo faces are switched off in this mode; it always uses the cartoon buddy.</p><div class="row center"><button class="btn primary" data-v="go">Bring it on</button><button class="btn" data-v="no">Stay Normal</button></div>';
+    $("modalCard").innerHTML = '<div class="res-emoji">😈</div><h2>Brutal mode</h2><p>Rougher weapons — sledgehammer, bat, frying pan, bricks, dynamite, anvils — with <b>cartoon blood, wounds and limbs that come off</b>. The buddy never dies — tap 🩹 Patch up to put them back together.</p><p class="muted">Photo faces are switched off in this mode; it always uses the cartoon buddy.</p><div class="row center"><button class="btn primary" data-v="go">Bring it on</button><button class="btn" data-v="no">Stay Normal</button></div>';
     $("modal").hidden = false;
     $("modalCard").querySelectorAll("[data-v]").forEach((b) => b.addEventListener("click", () => { $("modal").hidden = true; if (b.dataset.v === "go") { prefs.brutalOk = true; go(); } }));
   });

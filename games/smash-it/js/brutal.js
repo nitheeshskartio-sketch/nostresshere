@@ -22,7 +22,6 @@
       this.flameAcc = 0; this.lineT = 0; this.sootT = 0;
       this.buildGun();
       S.bus.on("gasBoom", (pos) => this.gasExplode(pos));
-      S.bus.on("death", () => this.later(0.9, () => this.spawnGhost()));
     }
 
     later(t, fn) { this.timers.push({ t, fn }); }
@@ -135,7 +134,7 @@
       for (let i = 0; i < 70; i++) this.flame.spawn({ pos: pos.clone().add(new V3(R(-0.3, 0.3), R(0, 0.6), R(-0.3, 0.3))), vel: new V3(R(-4, 4), R(1, 7), R(-4, 4)), size: R(0.12, 0.3), life: R(0.5, 1.1), color: pick(FLAME), gravity: -1, drag: 2.2, floor: false });
       W.shake(18); W.slowmo(0.9);
       const d = B.com.distanceTo(pos);
-      if (d < 3.2) B.damage(55 * (1 - d / 3.2), "gas");
+      B.blast(pos, 2.8, 18);
       this.ignite(pos, 1.3);
       // chain reaction
       for (const p of W.props) if (p.explosive && p.mesh.position.distanceTo(pos) < 2.4) p.heat = Math.max(p.heat || 0, 1.35);
@@ -144,7 +143,7 @@
 
     onExplosion(pos) {
       const B = this.buddy, d = B.com.distanceTo(pos);
-      if (d < 3) B.damage(30 * (1 - d / 3), this.boomSrc || "dynamite");
+      B.blast(pos, 2.2, 13);
       if (d < 1.4) this.burnBuddy();
       for (const pd of this.puddles) if (Math.hypot(pd.x - pos.x, pd.z - pos.z) < pd.r + 1) pd.burning = Math.max(pd.burning, 3 + pd.amount * 4);
       for (const p of this.world.props) if (p.explosive && p.mesh.position.distanceTo(pos) < 2.2) p.heat = Math.max(p.heat || 0, 1.35);
@@ -211,23 +210,6 @@
     }
 
     /* =========================================================
-       K.O. GHOST
-       ========================================================= */
-    spawnGhost() {
-      const g = new THREE.Group();
-      const m = new THREE.MeshStandardMaterial({ color: "#ffffff", transparent: true, opacity: 0.75, emissive: "#ffffff", emissiveIntensity: 0.3, roughness: 0.4 });
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 20, 14), m); g.add(head);
-      const tail = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.5, 20, 1, true), m); tail.rotation.x = Math.PI; tail.position.y = -0.3; g.add(tail);
-      const eye = new THREE.MeshBasicMaterial({ color: "#2a2833" });
-      for (const s of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), eye); e.position.set(s * 0.09, 0.03, 0.25); g.add(e); }
-      const halo = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.025, 8, 24), new THREE.MeshBasicMaterial({ color: "#ffd43b" })); halo.rotation.x = Math.PI / 2; halo.position.y = 0.36; g.add(halo);
-      g.position.copy(this.buddy.com).add(new V3(0, 0.4, 0));
-      this.world.fxGroup.add(g);
-      this.ghosts.push({ g, m, t: 0 });
-      S.audio.play("tweet");
-    }
-
-    /* =========================================================
        PER FRAME
        ========================================================= */
     update(dt, rdt) {
@@ -267,7 +249,6 @@
           this.flame.spawn({ pos: B.com.clone().add(local), vel: new V3(R(-0.3, 0.3), R(1.2, 2.6), R(-0.3, 0.3)), size: R(0.06, 0.15), life: R(0.3, 0.65), color: pick(FLAME), gravity: -1.5, floor: false });
         }
         if (Math.random() < dt * 6) W.fx.dust.spawn({ pos: B.com.clone().add(new V3(0, 1.1, 0)), vel: new V3(R(-0.2, 0.2), R(0.8, 1.4), R(-0.2, 0.2)), size: R(0.12, 0.2), life: 1.3, color: "#2f2f2f", gravity: -0.3, drag: 1, grow: 2.5, floor: false });
-        B.damage(7 * dt, "fire");
         this.sootT -= dt;
         if (this.sootT <= 0) { this.sootT = 0.9; B.face.splat(R(0.3, 0.7), R(0.3, 0.7), "soot", null, R(0.3, 0.5)); }
         this.lineT -= dt;

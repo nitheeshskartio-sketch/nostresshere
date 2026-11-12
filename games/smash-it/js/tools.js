@@ -681,7 +681,10 @@
     gore(point, dir, part, object, power) {
       const W = this.world, B = this.buddy;
       W.splash(point, pick(BLOOD), Math.round(8 + power * 2.2), 2 + power * 0.25, 0.028);
-      if (object && object !== B.faceMesh && object.userData && object.userData.part) B.addDecal(object, point, dir.clone().negate(), pick(BLOOD), 0.16 + power * 0.015);
+      if (object && object !== B.faceMesh && object.userData && object.userData.part) {
+        B.addDecal(object, point, dir.clone().negate(), pick(BLOOD), 0.18 + power * 0.018);
+        if (power >= 8) B.addDecal(object, point, dir.clone().negate(), "#ffffff", 0.14 + power * 0.008, S.gashTex);
+      }
       if (part === "head") B.face.injure(power);
       if (power > 7 || Math.random() < 0.4) W.floorSplat(new V3(B.com.x + R(-0.45, 0.45), 0, B.com.z + R(-0.3, 0.45)), "#7a0010", 0.35 + power * 0.05);
       if (power > 9) { W.slowmo(0.45); W.shake(power * 0.6); }
