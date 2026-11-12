@@ -221,7 +221,7 @@
       for (const k in this.saws) this.saws[k].visible = false;
       this.sawFx = this.sawFx || 0; this.sawLine = this.sawLine || 0; this.sawHit = this.sawHit || 0;
       if (!kind) { this.saw = null; S.audio.sawLevel(false, false); return; }
-      if (!this.saws[kind]) this.saws[kind] = kind === "chainsaw" ? this.buildChainsaw() : this.buildSaw();
+      if (!this.saws[kind]) { this.saws[kind] = kind === "chainsaw" ? this.buildChainsaw() : this.buildSaw(); this.saws[kind].scale.setScalar(2.2); } // big enough to read from the locked camera
       this.saw = this.saws[kind]; this.sawKind = kind;
       this.saw.visible = true;
     }
@@ -233,14 +233,15 @@
       const list = B.hitMeshes.concat(W.propGroup.children, W.solids);
       const h = ray.intersectObjects(list, true)[0];
       const dir = ray.ray.direction.clone();
-      const target = h && h.distance < 7 ? h.point.clone() : ray.ray.at(2.6, new V3());
+      // (no distance cap: the locked camera sits 8-13 m from the buddy)
+      const target = h ? h.point.clone() : ray.ray.at(Math.max(2, W.camera.position.distanceTo(B.com) - 0.4), new V3());
       const chain = this.sawKind === "chainsaw";
+      const right = new V3().crossVectors(dir, new V3(0, 1, 0)).normalize();
       if (chain) {
         // bar reaches out to the point you aim at
         // held from the side so you can see the bar and chain biting in
-        const right = new V3().crossVectors(dir, new V3(0, 1, 0)).normalize();
-        const tip = target.clone().addScaledVector(dir, held && h ? 0.03 : -0.1);
-        const want = tip.clone().addScaledVector(right, 0.3).add(new V3(0, -0.12, 0)).addScaledVector(dir, -0.36);
+        const tip = target.clone().addScaledVector(dir, held && h ? 0.05 : -0.1);
+        const want = tip.clone().addScaledVector(right, 0.45).add(new V3(0, -0.18, 0)).addScaledVector(dir, -0.95);
         this.saw.position.lerp(want, Math.min(1, dt * 25));
         this.saw.lookAt(tip);
         const u = this.saw.userData;
@@ -253,11 +254,12 @@
         });
       } else {
         // hover the blade just in front of whatever you point at
-        this.saw.position.lerp(target.clone().addScaledVector(dir, held && h ? 0.02 : -0.12), Math.min(1, dt * 25));
+        // the blade's lower edge bites into the point you aim at
+        this.saw.position.lerp(target.clone().add(new V3(0, 0.3, 0)).addScaledVector(dir, held && h ? 0.02 : -0.15), Math.min(1, dt * 25));
         this.saw.lookAt(W.camera.position);
         this.saw.userData.disc.rotation.z -= dt * (held ? 60 : 4);
       }
-      const cutting = !!(held && h && h.distance < 7);
+      const cutting = !!(held && h);
       S.audio.sawLevel(held, cutting, chain);
       if (!cutting) return;
       this.saw.position.x += R(-0.01, 0.01); this.saw.position.y += R(-0.01, 0.01);
@@ -272,8 +274,12 @@
         } else B.hurtCore(part, (chain ? 55 : 40) * dt, dir, false);
         B.nudge(dir, 0.12, part);
         if (this.sawFx <= 0) {
-          this.sawFx = 0.06;
-          W.splash(h.point, pick(["#9b0000", "#b3001b", "#7a0010"]), 7, 3.2, 0.024);
+          this.sawFx = 0.05;
+          W.splash(h.point, pick(["#9b0000", "#b3001b", "#7a0010"]), 4, 2.5, 0.022);
+          // the blade throws a rooster-tail of blood off in the direction it spins
+          const throwDir = chain ? dir.clone().negate().add(new V3(0, -0.35, 0)).addScaledVector(right, 0.35).normalize() : right.clone().add(new V3(0, 0.55, 0)).addScaledVector(dir, -0.4).normalize();
+          for (let i = 0; i < 6; i++) W.fx.drop.spawn({ pos: h.point.clone(), vel: throwDir.clone().multiplyScalar(R(3, 6.5)).add(new V3(R(-0.6, 0.6), R(-0.3, 0.6), R(-0.6, 0.6))), size: R(0.01, 0.024), life: 1.3, color: pick(["#9b0000", "#b3001b", "#7a0010"]), stretch: 0.9, hit: (pt) => { if (pt.pos.y < 0.03) { if (Math.random() < 0.25) W.floorSplat(pt.pos, "#7a0010", R(0.12, 0.26)); return true; } return false; } });
+          if (Math.random() < 0.35) W.fx.shard.spawn({ pos: h.point.clone(), vel: throwDir.clone().multiplyScalar(R(2, 4)).add(new V3(0, R(0.5, 1.5), 0)), size: R(0.015, 0.035), life: R(2, 3), color: pick(["#8f1212", "#6b0b0b", "#e8b9a0"]), spin: 12 });
           if (Math.random() < 0.3) W.floorSplat(new V3(h.point.x + R(-0.3, 0.3), 0, h.point.z + R(-0.3, 0.3)), "#7a0010", R(0.2, 0.4));
         }
         if (this.sawHit <= 0) {

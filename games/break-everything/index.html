@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>Break Everything · No Stress Here</title>
+  <meta name="description" content="Smash, crush, throw and blow up glass, plates, furniture and rubber ducks in 3D. Pure destruction stress relief." />
+  <script src="../../assets/js/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../../assets/css/base.css" />
+  <link rel="stylesheet" href="break.css" />
+</head>
+<body class="be-body">
+  <header class="site-header">
+    <a class="logo" href="../../index.html"><span class="logo-mark" aria-hidden="true"></span>No Stress <span class="here">Here</span></a>
+    <div class="header-actions">
+      <a class="pill-btn" href="../../index.html" title="Back to all games">← <span class="theme-label">Games</span></a>
+      <button class="pill-btn" type="button" data-theme-toggle aria-pressed="false">
+        <span class="theme-icon" aria-hidden="true"></span><span class="theme-label">Dark</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="be-app">
+    <div class="topbar">
+      <div class="tb-group">
+        <button class="tb" type="button" id="menuBtn" title="Main menu (Esc)">🏠</button>
+        <button class="tb wide" type="button" id="modeBtn" title="Game modes">🔨 <span class="lbl" id="modeName">Free Destruction</span></button>
+        <button class="tb" type="button" id="resetBtn" title="Restart">↺</button>
+        <button class="tb" type="button" id="newBtn" title="New collection of objects">📦</button>
+        <button class="tb" type="button" id="debrisBtn" title="Clear debris">🧹</button>
+      </div>
+      <div class="tb-group">
+        <div class="dd">
+          <button class="tb wide" type="button" id="viewBtn" title="Camera angle">🎥 <span class="lbl" id="viewName">Normal</span> ▾</button>
+          <div class="dd-menu" id="viewMenu" hidden></div>
+        </div>
+        <button class="tb" type="button" id="replayBtn" title="Slow-motion replay of the last break (R)">⏪</button>
+        <button class="tb" type="button" id="slowBtn" title="Slow motion (S)">🐢</button>
+      </div>
+      <div class="tb-group">
+        <button class="tb" type="button" id="soundBtn" title="Sound">🔊</button>
+        <button class="tb" type="button" id="shakeBtn" title="Screen shake">📳</button>
+        <button class="tb" type="button" id="fxBtn" title="Effects & particles">✨</button>
+        <button class="tb" type="button" id="envBtn" title="Environments">🏠</button>
+        <button class="tb" type="button" id="statsBtn" title="My statistics">📊</button>
+        <button class="tb" type="button" id="fullBtn" title="Fullscreen">⤢</button>
+      </div>
+    </div>
+
+    <div class="workspace">
+      <aside class="tools" id="tools" aria-label="Tools"></aside>
+
+      <div class="stage" id="stage">
+        <div class="hud">
+          <div class="hud-l">
+            <div class="hud-score"><b id="score">0</b><small>points</small></div>
+            <div class="hud-small">💥 <b id="brokenN">0</b> broken</div>
+          </div>
+          <div class="hud-c" id="modeHud"></div>
+          <div class="hud-r"><div class="combo" id="combo" aria-live="polite"></div></div>
+        </div>
+        <div class="replay-badge" id="replayBadge" hidden>⏪ REPLAY <button type="button" id="skipReplay">Skip</button></div>
+        <div class="tool-tip" id="toolTip"></div>
+
+        <div class="menu" id="mainMenu">
+          <div class="menu-card">
+            <div class="menu-art" aria-hidden="true"><span>🍽️</span><span>💥</span><span>🪟</span></div>
+            <h1>Break Everything</h1>
+            <p class="muted">Plates, bottles, chairs, TVs, a giant rubber duck. Smash it, crush it, throw it, blow it up. No cleaning required.</p>
+            <div class="menu-btns">
+              <button class="mbtn primary" type="button" data-m="free">🔨 Free Destruction</button>
+              <button class="mbtn" type="button" data-m="modes">🎮 Game Modes</button>
+              <div class="menu-row">
+                <button class="mbtn" type="button" data-m="objects">🍽️ Objects</button>
+                <button class="mbtn" type="button" data-m="toolsC">🧰 Tools</button>
+              </div>
+              <div class="menu-row">
+                <button class="mbtn" type="button" data-m="envs">🏠 Environments</button>
+                <button class="mbtn" type="button" data-m="stats">📊 My Statistics</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="side" id="side">
+        <section>
+          <h4>Add objects</h4>
+          <div class="chips" id="cats"></div>
+          <div class="objs" id="objs"></div>
+        </section>
+        <section>
+          <h4>Customise</h4>
+          <label class="slider"><span>Size <b id="sizeVal">100%</b></span><input type="range" id="size" min="50" max="200" step="10" value="100" /></label>
+          <label class="slider"><span>Quantity <b id="qtyVal">1</b></span><input type="range" id="qty" min="1" max="10" value="1" /></label>
+          <div class="field"><span>Material</span><select id="matSel"></select></div>
+          <div class="swatches" id="swatches"></div>
+          <div class="row">
+            <button class="btn primary" type="button" id="addBtn">➕ Add</button>
+            <button class="btn" type="button" id="placeBtn">📍 Click to place</button>
+          </div>
+          <p class="hint muted">Use ✋ Grab to arrange things. Stack them, line them up, then wreck them.</p>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <div class="modal" id="modal" hidden><div class="modal-card" id="modalCard"></div></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="../../assets/vendor/three.js"></script>
+  <script src="../../assets/vendor/cannon-es.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/objects.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/tools.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>

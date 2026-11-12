@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>Sand Therapy · No Stress Here</title>
+  <meta name="description" content="Virtual kinetic sand: cut, crush, squish, carve and mould soft satisfying sand." />
+  <script src="../../assets/js/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../../assets/css/base.css" />
+  <link rel="stylesheet" href="sand.css" />
+</head>
+<body class="sand-body">
+  <header class="site-header">
+    <a class="logo" href="../../index.html"><span class="logo-mark" aria-hidden="true"></span>No Stress <span class="here">Here</span></a>
+    <div class="header-actions">
+      <a class="pill-btn" href="../../index.html" title="Back to all games">← <span class="theme-label">Games</span></a>
+      <button class="pill-btn" type="button" data-theme-toggle aria-pressed="false">
+        <span class="theme-icon" aria-hidden="true"></span><span class="theme-label">Dark</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="sand-app">
+    <div class="topbar">
+      <div class="tb-group">
+        <button class="tb" type="button" id="menuBtn" title="Main menu">🏠</button>
+        <button class="tb" type="button" id="undoBtn" title="Undo (Ctrl+Z)">↶</button>
+        <button class="tb" type="button" id="redoBtn" title="Redo (Ctrl+Y)">↷</button>
+        <div class="dd">
+          <button class="tb wide" type="button" id="resetBtn" title="Reset the sand">↺ <span class="lbl">Reset</span> ▾</button>
+          <div class="dd-menu" id="resetMenu" hidden></div>
+        </div>
+        <button class="tb" type="button" id="randomBtn" title="Random sand">🎲</button>
+      </div>
+      <div class="tb-group challenge-slot" id="challengeSlot"></div>
+      <div class="tb-group">
+        <button class="tb" type="button" id="slowBtn" title="Slow motion">🐢</button>
+        <button class="tb" type="button" id="soundBtn" title="Sound">🔊</button>
+        <button class="tb" type="button" id="fxBtn" title="Particles & effects">✨</button>
+        <button class="tb" type="button" id="envBtn" title="Playground">🏖️</button>
+        <button class="tb" type="button" id="saveBtn" title="Save to My Creations">💾</button>
+        <button class="tb" type="button" id="shotBtn" title="Download a picture">📸</button>
+        <button class="tb" type="button" id="fullBtn" title="Fullscreen">⤢</button>
+      </div>
+    </div>
+
+    <div class="workspace">
+      <aside class="tools" id="tools" aria-label="Tools"></aside>
+
+      <div class="stage" id="stage">
+        <div class="tool-tip" id="toolTip"></div>
+        <div class="menu" id="mainMenu">
+          <div class="menu-card">
+            <div class="menu-sand" aria-hidden="true"><span></span><span></span><span></span></div>
+            <h1>Sand Therapy</h1>
+            <p class="muted">Soft, squishy, endlessly reshapeable kinetic sand. Slice it, crush it, squish it, start over. No rules.</p>
+            <div class="menu-btns">
+              <button class="mbtn primary" type="button" data-m="play">▶ Start playing</button>
+              <button class="mbtn" type="button" data-m="type">🎨 Sand type</button>
+              <button class="mbtn" type="button" data-m="env">🏖️ Playground</button>
+              <button class="mbtn" type="button" data-m="challenges">🏆 Challenges</button>
+              <button class="mbtn" type="button" data-m="creations">🖼️ My creations</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="side" id="side">
+        <section>
+          <h4>Sand type</h4>
+          <div class="chips" id="types"></div>
+        </section>
+        <section>
+          <h4>Colour</h4>
+          <div class="chips" id="schemes"></div>
+          <div class="swatches" id="swatches"></div>
+          <div class="row">
+            <label class="picker" title="Custom colour">🎨<input type="color" id="picker" value="#e8b07a" /></label>
+            <button class="btn small" type="button" id="applyColor">Colour all the sand</button>
+          </div>
+          <p class="hint muted">The picked colour is used for poured & moulded sand. Mix colours by pouring!</p>
+        </section>
+        <section>
+          <h4>Tool</h4>
+          <label class="slider"><span>Size <b id="sizeVal">18</b></span><input type="range" id="size" min="6" max="60" value="18" /></label>
+          <label class="slider"><span>Pressure <b id="pressVal">60%</b></span><input type="range" id="press" min="15" max="100" value="60" /></label>
+          <div id="shapeOpts"></div>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <div class="modal" id="modal" hidden><div class="modal-card" id="modalCard"></div></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="../../assets/vendor/three.js"></script>
+  <script src="js/sand.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

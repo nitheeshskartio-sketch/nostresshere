@@ -209,6 +209,13 @@
     if (current.kind === "gun") { brutal.shoot(ndc.clone()); down = Object.assign(base, { mode: "gun", last: performance.now() }); hideHint(); return; }
     if (current.kind === "place") { brutal.placeGas(aimPoint(ray), !!ch); down = Object.assign(base, { mode: "none" }); hideHint(); return; }
     if (current.kind === "drop" && !ch) { tools.drop(current); down = Object.assign(base, { mode: "none" }); hideHint(); return; }
+    if (ch && current.kind === "melee" && buddy.brutal) {
+      // brutal weapons hit straight away; hold to keep hitting, drag to grab
+      tools.melee(current, { point: ch.point.clone(), part: ch.object.userData.part, object: ch.object });
+      down = Object.assign(base, { mode: "slash", hit: ch, last: performance.now() });
+      hideHint();
+      return;
+    }
     if (ch) {
       down = Object.assign(base, { mode: "pending", hit: ch });
       holdTimer = setTimeout(startGrab, 380);
@@ -232,6 +239,7 @@
     if (!down || e.pointerId !== down.id) return;
     const ray = world.rayFrom(ndc);
     const dx = e.clientX - down.x, dy = e.clientY - down.y;
+    if (down.mode === "slash" && Math.hypot(dx, dy) > 14) { down.mode = "pending"; startGrab(); }
     if (down.mode === "pending" && Math.hypot(dx, dy) > 9) startGrab();
     if (down.mode === "grab") { const p = new V3(); if (ray.ray.intersectPlane(down.plane, p)) buddy.grabMove(p); }
     else if (down.mode === "spray") tools.aim.copy(aimPoint(ray));
@@ -336,8 +344,9 @@
 
   const h = (html) => { const d = document.createElement("div"); d.innerHTML = html.trim(); return d.firstChild; };
 
+  const BRUTAL_FACES = [["", "🙂 Classic"], ["boss", "👔 Grumpy boss"], ["villain", "🎩 Villain"], ["clown", "🤡 Clown"], ["pirate", "🏴‍☠️ Pirate"], ["monster", "🧟 Monster"]];
   const PANELS = {
-    face: { title: "📷 Upload a face", render: renderFacePanel },
+    face: { title: "📷 Face", render: renderFacePanel },
     char: { title: "👕 Character", render: renderCharPanel },
     room: { title: "🏠 Room", render: renderRoomPanel },
     mode: { title: "🎮 Game mode", render: renderModePanel },
@@ -348,8 +357,18 @@
   let photoImg = null;
   function renderFacePanel(el) {
     if (prefs.violence === "brutal") {
-      el.appendChild(h('<p class="privacy">😇 <b>Photo faces only work in Normal mode.</b> Brutal mode always uses the cartoon buddy — no real faces get the rough treatment.</p>'));
-      const b = h('<button class="btn primary" type="button">😇 Switch to Normal mode</button>');
+      el.appendChild(h('<p class="privacy">😈 <b>Pick a cartoon face for Brutal mode.</b> Real photos stay in Normal mode — nobody\'s actual face gets the gore treatment.</p>'));
+      const wrap = h('<div class="face-edit"><canvas id="facePrev" width="240" height="240" aria-label="Face preview"></canvas></div>');
+      el.appendChild(wrap);
+      const grid = h('<div class="chips costume-chips"></div>');
+      BRUTAL_FACES.forEach(([id, label]) => {
+        const c = h('<button class="chip' + ((prefs.brutalFace || "") === id ? " active" : "") + '" type="button">' + label + "</button>");
+        c.addEventListener("click", () => { prefs.brutalFace = id; save(); face.costume = id || null; face.dirty = true; grid.querySelectorAll(".chip").forEach((x) => x.classList.remove("active")); c.classList.add("active"); face.drawPreview($("facePrev").getContext("2d"), 240); buddy.react("surprised", 1.2); });
+        grid.appendChild(c);
+      });
+      el.appendChild(grid);
+      face.drawPreview($("facePrev").getContext("2d"), 240);
+      const b = h('<button class="btn" type="button" style="margin-top:10px">😇 Use a photo (Normal mode)</button>');
       b.addEventListener("click", () => { setViolence("normal"); openPanel("face"); });
       el.appendChild(b);
       return;
@@ -699,7 +718,7 @@
   function setViolence(v) {
     prefs.violence = v; save();
     const brutal = v === "brutal";
-    face.suppress = brutal; face.dirty = true; face.photoDirty = true;
+    face.suppress = brutal; face.costume = brutal ? prefs.brutalFace || null : null; face.dirty = true; face.photoDirty = true;
     if (!brutal) { S.brutal.clear(); if (buddy.lost.size) { buddy.revive(); applyStyle(); } }
     buddy.brutal = brutal; buddy.refreshFace();
     document.body.classList.toggle("brutal", brutal);
@@ -715,7 +734,7 @@
     if (prefs.violence === "brutal") return;
     const go = () => { setViolence("brutal"); toast("😈 Brutal mode — cartoon buddy only."); buddy.react("scared", 1.6, "Uh oh. Where did you get a sledgehammer?"); };
     if (prefs.brutalOk) return go();
-    $("modalCard").innerHTML = '<div class="res-emoji">😈</div><h2>Brutal mode</h2><p>Rougher weapons — sledgehammer, bat, frying pan, bricks, dynamite, anvils — with <b>cartoon blood, wounds and limbs that come off</b>. The buddy never dies — tap 🩹 Patch up to put them back together.</p><p class="muted">Photo faces are switched off in this mode; it always uses the cartoon buddy.</p><div class="row center"><button class="btn primary" data-v="go">Bring it on</button><button class="btn" data-v="no">Stay Normal</button></div>';
+    $("modalCard").innerHTML = '<div class="res-emoji">😈</div><h2>Brutal mode</h2><p>Rougher weapons — sledgehammer, bat, frying pan, bricks, dynamite, anvils — with <b>cartoon blood, wounds and limbs that come off</b>. The buddy never dies — tap 🩹 Patch up to put them back together.</p><p class="muted">Photo faces are switched off in this mode. Pick a cartoon face instead (boss, villain, clown…) in 📷 Face.</p><div class="row center"><button class="btn primary" data-v="go">Bring it on</button><button class="btn" data-v="no">Stay Normal</button></div>';
     $("modal").hidden = false;
     $("modalCard").querySelectorAll("[data-v]").forEach((b) => b.addEventListener("click", () => { $("modal").hidden = true; if (b.dataset.v === "go") { prefs.brutalOk = true; go(); } }));
   });
@@ -728,6 +747,11 @@
     brutal.sawUpdate(rdt, ndc, !!(down && down.mode === "saw"));
     const dt = rdt * world.timeScale;
     if (down && down.mode === "gun" && now - down.last > 180) { down.last = now; brutal.shoot(ndc.clone()); }
+    if (down && down.mode === "slash" && current.kind === "melee" && now - down.last > Math.max(300, (current.tc + 0.3) * 1000)) {
+      down.last = now;
+      const hit = world.rayFrom(ndc).intersectObjects(buddy.hitMeshes, false)[0];
+      if (hit) tools.melee(current, { point: hit.point.clone(), part: hit.object.userData.part, object: hit.object });
+    }
     if (down && down.mode === "throw" && now - down.last > 230) {
       down.last = now;
       const ray = new THREE.Raycaster(); ray.ray.copy(down.ray);

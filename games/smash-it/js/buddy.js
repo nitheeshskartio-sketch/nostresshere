@@ -51,7 +51,8 @@
     dance: ["Watch these moves!", "Party time!"],
     yawn: ["*yawn*", "So sleepy…"],
     pancake: ["I'm a pancake!", "Flat as a…", "Squished!"],
-    sever: ["My arm!", "I was using that!", "It's just a flesh wound!", "That's not coming back, is it?", "Who needs two legs anyway?", "Can I get that back?", "Okay, now you're just showing off."],
+    severArm: ["MY ARM!", "I was using that!", "It's just a flesh wound!", "That's not coming back, is it?", "Can I get that back?", "Okay, now you're just showing off.", "How do I high-five now?!"],
+    severLeg: ["MY LEG!", "Who needs two legs anyway?", "I can't feel my foot! Because it's OVER THERE!", "That's not coming back, is it?", "Hop. Hop. Hop.", "Can I get that back?"],
     brutal: ["That's gonna leave a mark!", "My spleen!", "I need a doctor!", "Not cool!", "Call my lawyer!", "Ow, my everything!", "Was that a sledgehammer?!", "I felt that in my soul!"]
   };
   S.LINES = LINES;
@@ -647,18 +648,31 @@
       L.joints.forEach((j) => this.lostJoints.add(j));
       this.hitMeshes = this.hitMeshes.filter((m) => !L.meshes.includes(m));
       const g = L.g;
+      const restQ = g.quaternion.clone();
       g.updateWorldMatrix(true, true);
       const pos = g.getWorldPosition(new V3()), quat = g.getWorldQuaternion(new Q()), scl = g.getWorldScale(new V3());
       // the wound left on the body
-      const fleshMat = new THREE.MeshStandardMaterial({ color: "#7a0c0c", roughness: 0.3 });
-      const boneMat = new THREE.MeshStandardMaterial({ color: "#efe3c8", roughness: 0.6 });
+      const fleshMat = new THREE.MeshPhysicalMaterial({ color: "#8f1212", roughness: 0.25, clearcoat: 0.8, clearcoatRoughness: 0.15 });
+      const darkMat = new THREE.MeshStandardMaterial({ color: "#4a0505", roughness: 0.4 });
+      const boneMat = new THREE.MeshStandardMaterial({ color: "#efe3c8", roughness: 0.55 });
+      const marrowMat = new THREE.MeshStandardMaterial({ color: "#b5651d", roughness: 0.7 });
+      const skinMat = new THREE.MeshStandardMaterial({ color: this.look.skin || "#f1c27d", roughness: 0.6 });
+      const rr = L.kind === "arm" ? 0.08 : 0.1;
+      // ragged cut: torn skin rim, wet muscle, dark core, bone with marrow
       const makeStump = () => {
         const st = new THREE.Group();
-        const f = new THREE.Mesh(new THREE.SphereGeometry(L.kind === "arm" ? 0.082 : 0.105, 16, 12), fleshMat); f.scale.y = 0.6; st.add(f);
-        const b = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.026, 0.06, 10), boneMat); b.position.y = -0.04; st.add(b);
+        const f = new THREE.Mesh(new THREE.SphereGeometry(rr, 18, 12), fleshMat); f.scale.y = 0.45; f.position.y = -0.01; st.add(f);
+        const rim = new THREE.Mesh(new THREE.TorusGeometry(rr * 0.98, rr * 0.16, 6, 22), skinMat); rim.rotation.x = Math.PI / 2; rim.position.y = -0.012;
+        const ra = rim.geometry.attributes.position;
+        for (let i = 0; i < ra.count; i++) ra.setZ(i, ra.getZ(i) + R(-0.014, 0.014)); // jagged torn edge
+        rim.geometry.computeVertexNormals(); st.add(rim);
+        const core = new THREE.Mesh(new THREE.CircleGeometry(rr * 0.55, 14), darkMat); core.rotation.x = Math.PI / 2; core.position.y = -0.04; st.add(core);
+        const b = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.028, 0.07, 10), boneMat); b.position.y = -0.05; st.add(b);
+        const m = new THREE.Mesh(new THREE.CircleGeometry(0.012, 10), marrowMat); m.rotation.x = Math.PI / 2; m.position.y = -0.0855; st.add(m);
+        for (let i = 0; i < 5; i++) { const t = new THREE.Mesh(new THREE.SphereGeometry(R(0.012, 0.022), 6, 5), i % 2 ? fleshMat : skinMat); const a = R(0, 6.28); t.position.set(Math.cos(a) * rr * 0.9, -0.02 - R(0, 0.02), Math.sin(a) * rr * 0.9); st.add(t); }
         return st;
       };
-      const stump = makeStump(); stump.position.copy(g.position); L.parent.add(stump);
+      const stump = makeStump(); stump.position.copy(g.position); stump.quaternion.copy(restQ); L.parent.add(stump);
       // the limb flies off as a physics object you can keep knocking around
       L.parent.remove(g);
       g.position.set(0, 0, 0); g.quaternion.identity(); g.scale.copy(scl);
@@ -669,14 +683,15 @@
       const v = dir.clone().multiplyScalar(2 + p * 0.3).add(new V3(R(-1, 1), 2.5 + p * 0.15, R(-1, 1)));
       prop.body.velocity.set(v.x, v.y, v.z);
       prop.body.angularVelocity.set(R(-8, 8), R(-8, 8), R(-8, 8));
-      this.bleeds.push({ obj: stump, t: 6, acc: 0 }, { obj: cap, t: 3.5, acc: 0 });
+      // arterial spurts pump with the heartbeat for a while, then slow to a trickle
+      this.bleeds.push({ obj: stump, t: 7, acc: 0, pulse: true, age: 0 }, { obj: cap, t: 3.5, acc: 0, pulse: true, age: 0 });
       // blood everywhere
       W.splash(pos, "#9b0000", 45, 4.5, 0.032);
       W.floorSplat(new V3(pos.x, 0, pos.z), "#7a0010", 1.1);
       W.shake(10); W.slowmo(0.6);
       S.audio.play("crunch", 14); S.audio.play("splat");
       this.face.injure(10);
-      this.react(L.kind === "arm" ? "cry" : "scared", 2.2, "sever");
+      this.react(L.kind === "arm" ? "cry" : "scared", 2.2, L.kind === "arm" ? "severArm" : "severLeg");
       S.bus.emit("sever", { key });
       if (L.kind === "leg" && (this.state === "stand" || this.state === "getup")) { this.toFly(new V3(R(-1, 1), 1.5, R(-0.5, 0.5)), true); this.angVel.set(R(-3, 3), 0, R(-3, 3)); }
     }
@@ -701,6 +716,20 @@
       for (const b of this.bleeds) {
         if (b.t <= 0 || !b.obj.parent) continue;
         b.t -= dt; b.acc += dt;
+        if (b.pulse) {
+          b.age += dt;
+          const beat = Math.pow(Math.max(0, Math.sin(b.age * 7.2)), 4) * Math.max(0.15, 1 - b.age / 7);
+          if (beat < 0.08 || b.acc < 0.016) continue;
+          b.acc = 0;
+          const wp = b.obj.getWorldPosition(new V3());
+          const out = new V3(0, -1, 0).applyQuaternion(b.obj.getWorldQuaternion(new Q()));
+          for (let i = 0; i < 2; i++) W.fx.drop.spawn({
+            pos: wp.clone().addScaledVector(out, 0.03), vel: out.clone().multiplyScalar(R(2.2, 4.2) * beat).add(new V3(R(-0.4, 0.4), R(0, 0.6), R(-0.4, 0.4))), size: R(0.014, 0.026), life: 1.6,
+            color: pick(["#a30000", "#b3001b", "#8a0010"]), stretch: 0.9,
+            hit: (pt) => { if (pt.pos.y < 0.03) { if (Math.random() < 0.35) W.floorSplat(pt.pos, "#7a0010", R(0.14, 0.3)); return true; } return false; }
+          });
+          continue;
+        }
         if (b.acc < 0.05) continue;
         b.acc = 0;
         const wp = b.obj.getWorldPosition(new V3());

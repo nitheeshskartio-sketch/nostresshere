@@ -157,6 +157,7 @@
 
       // the cartoon features are drawn a bit bigger than the photo guides
       c.save(); c.translate(256, 290); c.scale(1.45, 1.45); c.translate(-256, -290);
+      if (this.costume) this.drawCostume(c, "under");
       // blush
       if (["laugh", "happy", "comfy", "hurt", "cry"].includes(e)) {
         c.fillStyle = "rgba(255,90,120,0.28)";
@@ -168,6 +169,57 @@
       this.drawMouth(c, mouth, t);
       if (e === "cry") this.drawTears(c, t);
       if (e === "confused" || e === "scared" || e === "hurt") this.drawSweat(c, t);
+      if (this.costume) this.drawCostume(c, "over");
+      c.restore();
+    }
+
+    /* ---------- cartoon face styles (Brutal mode's alternative to photos) ---------- */
+    drawCostume(c, layer) {
+      const k = this.costume, [lx, ly] = EYE_L, [rx, ry] = EYE_R, [mx, my] = MOUTH;
+      const ink = "#2a2833";
+      c.save(); c.lineCap = "round"; c.lineJoin = "round";
+      if (k === "clown" && layer === "under") {
+        c.fillStyle = "#ffffff"; c.strokeStyle = "#4dabf7"; c.lineWidth = 5;
+        for (const [x, y] of [[lx, ly], [rx, ry]]) { c.beginPath(); c.moveTo(x, y - 62); c.lineTo(x + 30, y); c.lineTo(x, y + 62); c.lineTo(x - 30, y); c.closePath(); c.fill(); c.stroke(); }
+        c.fillStyle = "rgba(240,40,60,0.55)"; for (const x of [150, 362]) { c.beginPath(); c.arc(x, 312, 26, 0, 7); c.fill(); }
+        c.fillStyle = "#e03131"; c.beginPath(); c.ellipse(mx, my + 4, 70, 30, 0, 0, 7); c.fill();
+      }
+      if (k === "clown" && layer === "over") {
+        const g = c.createRadialGradient(248, 284, 4, 256, 292, 28); g.addColorStop(0, "#ff8787"); g.addColorStop(1, "#c92a2a");
+        c.fillStyle = g; c.beginPath(); c.arc(256, 292, 27, 0, 7); c.fill();
+        c.fillStyle = "rgba(255,255,255,0.8)"; c.beginPath(); c.arc(247, 283, 7, 0, 7); c.fill();
+      }
+      if (k === "boss" && layer === "over") {
+        c.strokeStyle = "#212529"; c.lineWidth = 8;
+        for (const [x, y] of [[lx, ly], [rx, ry]]) { c.beginPath(); c.roundRect(x - 40, y - 30, 80, 60, 12); c.stroke(); }
+        c.beginPath(); c.moveTo(lx + 40, ly - 6); c.quadraticCurveTo(256, ly - 18, rx - 40, ry - 6); c.stroke();
+        c.fillStyle = "rgba(170,210,255,0.18)"; for (const [x, y] of [[lx, ly], [rx, ry]]) { c.beginPath(); c.roundRect(x - 36, y - 26, 72, 52, 10); c.fill(); }
+        c.fillStyle = "#4a3426"; c.beginPath(); c.moveTo(196, 322); c.quadraticCurveTo(226, 296, 256, 312); c.quadraticCurveTo(286, 296, 316, 322); c.quadraticCurveTo(286, 334, 256, 324); c.quadraticCurveTo(226, 334, 196, 322); c.fill();
+        c.strokeStyle = "#4a3426"; c.lineWidth = 14; c.beginPath(); c.moveTo(lx - 30, ly - 66); c.lineTo(rx + 30, ry - 66); c.stroke(); // one big angry unibrow
+      }
+      if (k === "villain" && layer === "over") {
+        c.fillStyle = "#212529";
+        c.beginPath(); c.moveTo(256, 312); c.bezierCurveTo(220, 296, 190, 318, 176, 300); c.bezierCurveTo(160, 282, 176, 266, 188, 280); c.bezierCurveTo(176, 286, 186, 302, 204, 300); c.bezierCurveTo(226, 298, 242, 302, 256, 304);
+        c.bezierCurveTo(270, 302, 286, 298, 308, 300); c.bezierCurveTo(326, 302, 336, 286, 324, 280); c.bezierCurveTo(336, 266, 352, 282, 336, 300); c.bezierCurveTo(322, 318, 292, 296, 256, 312); c.fill();
+        c.strokeStyle = "#f2c94c"; c.lineWidth = 7; c.beginPath(); c.arc(rx, ry, 40, 0, 7); c.stroke();
+        c.fillStyle = "rgba(255,255,255,0.15)"; c.beginPath(); c.arc(rx, ry, 37, 0, 7); c.fill();
+        c.lineWidth = 3; c.beginPath(); c.moveTo(rx + 34, ry + 22); c.quadraticCurveTo(rx + 70, ry + 90, rx + 40, ry + 150); c.stroke();
+      }
+      if (k === "pirate" && layer === "over") {
+        c.strokeStyle = "#212529"; c.lineWidth = 7; c.beginPath(); c.moveTo(lx - 100, ly - 90); c.lineTo(rx + 100, ry + 30); c.stroke();
+        c.fillStyle = "#212529"; c.beginPath(); c.ellipse(lx, ly + 2, 42, 36, 0.15, 0, 7); c.fill();
+        c.strokeStyle = "#c2255c"; c.lineWidth = 6; c.beginPath(); c.moveTo(rx + 10, ry - 70); c.lineTo(rx - 14, ry + 54); c.stroke();
+        c.lineWidth = 3; for (let i = 0; i < 4; i++) { const y = ry - 50 + i * 28, x = rx + 6 - i * 6; c.beginPath(); c.moveTo(x - 12, y - 2); c.lineTo(x + 12, y + 2); c.stroke(); }
+      }
+      if (k === "monster" && layer === "under") {
+        c.fillStyle = "rgba(120,180,110,0.35)"; c.fillRect(-200, -200, 912, 912); // a bit green around the gills
+      }
+      if (k === "monster" && layer === "over") {
+        c.strokeStyle = ink; c.lineWidth = 5; c.beginPath(); c.moveTo(150, 168); c.lineTo(362, 158); c.stroke();
+        for (let x = 162; x < 360; x += 22) { c.beginPath(); c.moveTo(x, 156); c.lineTo(x + 4, 178); c.stroke(); }
+        c.fillStyle = "rgba(60,40,70,0.35)"; for (const [x, y] of [[lx, ly], [rx, ry]]) { c.beginPath(); c.ellipse(x, y + 30, 34, 14, 0, 0, 7); c.fill(); }
+        c.fillStyle = "#868e96"; for (const x of [88, 424]) { c.fillRect(x - 12, 280, 24, 36); c.fillStyle = "#adb5bd"; c.fillRect(x - 18, 284, 36, 10); c.fillStyle = "#868e96"; }
+      }
       c.restore();
     }
 
