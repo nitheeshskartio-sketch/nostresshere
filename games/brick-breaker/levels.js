@@ -246,7 +246,7 @@
     const tier = tierOf(n);
     const L = { n, tier, kind: "normal", lives: 3, movers: [], movingRows: [], time: 0 };
     if (n % 10 === 0) {
-      if (n % 20 === 0) { L.kind = "boss"; L.grid = null; LEVELS.push(L); continue; }
+      if (n % 20 === 0) { L.kind = "boss"; L.grid = null; L.name = "Boss Battle"; LEVELS.push(L); continue; }
       L.kind = "fortress";
     } else if (n % 10 === 5 && n >= 15) L.kind = SPECIAL_ROT[Math.floor(n / 10) % SPECIAL_ROT.length];
     if (L.kind === "limited") L.lives = 1;
@@ -283,7 +283,7 @@
     L.rows = R;
     L.name = L.kind === "normal" ? fam.name : SPECIAL_INFO[L.kind].name + (fam.name && L.kind !== "fortress" && L.kind !== "maze" && L.kind !== "survival" ? ": " + fam.name : "");
     const breakables = count(g, isBreak);
-    if (L.kind === "time") L.time = Math.round(45 + breakables * 1.1);
+    if (L.kind === "time") L.time = Math.round(60 + breakables * 1.7);
     LEVELS.push(L);
   }
 

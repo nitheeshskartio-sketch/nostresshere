@@ -6,15 +6,16 @@
      CONSTANTS
      ========================================================= */
   const W = 640, H = 800;              // logical playfield size
-  const COLS = 10, MARGIN = 20, GAP = 4;
+  const COLS = 12, MARGIN = 20, GAP = 4;
   const BW = (W - MARGIN * 2 - GAP * (COLS - 1)) / COLS;
-  const BH = 24;
-  const TOP = 64;                      // first brick row y
+  const BH = 22;
+  const TOP = 58;                      // first brick row y
   const PADDLE_Y = H - 64, PADDLE_H = 16, PADDLE_W = 112;
   const BALL_R = 8;
   const MAX_BALLS = 15;
   const LIFE_EVERY = 10000;
-  const TIER_SPEED = [380, 420, 460, 500];
+  const TIER_SPEED = [370, 395, 420, 445, 470];
+  const LV = window.BBLevels;
   const ROW_COLORS = ["#ff6b6b", "#ffa94d", "#ffd43b", "#69db7c", "#38d9a9", "#4dabf7", "#748ffc", "#b197fc", "#f783ac", "#ff8787", "#ffc078", "#8ce99a"];
 
   /* =========================================================
@@ -23,17 +24,19 @@
   const $ = (id) => document.getElementById(id);
   const canvas = $("game"), ctx = canvas.getContext("2d");
   const wrap = $("wrap"), overlay = $("overlay"), card = $("overlayCard");
-  const hudScore = $("hudScore"), hudLevel = $("hudLevel"), hudLives = $("hudLives"), hudBest = $("hudBest");
+  const hudScore = $("hudScore"), hudLevel = $("hudLevel"), hudLives = $("hudLives"), hudBricks = $("hudBricks");
   const soundBtn = $("soundBtn"), pauseBtn = $("pauseBtn"), toastEl = $("toast");
 
   const store = {
     get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k, String(v)); } catch (e) {} }
   };
-  let best = parseInt(store.get("nsh-bb-best", "0"), 10) || 0;
-  let maxLevel = parseInt(store.get("nsh-bb-level", "1"), 10) || 1;
-  let starMap = {};
-  try { starMap = JSON.parse(store.get("nsh-bb-stars", "{}")) || {}; } catch (e) { starMap = {}; }
+  // progress: unlocked level, stars and best score per level
+  let prog = { unlocked: 1, stars: {}, best: {} };
+  try { prog = Object.assign(prog, JSON.parse(store.get("nsh-bb-progress", "{}")) || {}); } catch (e) {}
+  if (!store.get("nsh-bb-progress", null)) prog.unlocked = Math.max(1, Math.min(30, parseInt(store.get("nsh-bb-level", "1"), 10) || 1));
+  const saveProg = () => store.set("nsh-bb-progress", JSON.stringify(prog));
+  const totalStars = () => Object.values(prog.stars).reduce((a, b) => a + b, 0);
   let soundOn = store.get("nsh-bb-sound", "1") === "1";
 
   /* =========================================================
@@ -68,10 +71,30 @@
     ctx.closePath();
   }
   const isDark = () => document.documentElement.getAttribute("data-theme") === "dark";
+  // the playfield is always a dark arcade cabinet, whatever the site theme
   function theme() {
-    return isDark()
-      ? { bg: "#1b1a24", dot: "rgba(255,255,255,0.05)", text: "#f3f0fa", muted: "#a6a2b4", chip: "rgba(255,255,255,0.08)", steel: ["#9aa0ad", "#5d6270"], ball: "#ffffff" }
-      : { bg: "#fdfcff", dot: "rgba(60,40,100,0.06)", text: "#2a2833", muted: "#7a7684", chip: "rgba(42,40,51,0.06)", steel: ["#d5d9e0", "#9299a6"], ball: "#2a2833" };
+    return { bg: "#11121b", dot: "rgba(255,255,255,0.05)", text: "#f3f0fa", muted: "#a6a2b4", chip: "rgba(255,255,255,0.08)", steel: ["#d7dce3", "#6c7480"], ball: "#ffffff" };
+  }
+  let bgCache = null;
+  function background() {
+    if (bgCache) return bgCache;
+    const c = document.createElement("canvas"); c.width = W; c.height = H;
+    const x = c.getContext("2d");
+    const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#151628"); g.addColorStop(1, "#0d0e16");
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    // subtle hexagon pattern
+    x.strokeStyle = "rgba(140,150,255,0.06)"; x.lineWidth = 1.2;
+    const r = 26, hw = r * Math.sqrt(3);
+    for (let row = -1; row < H / (r * 1.5) + 1; row++) for (let col = -1; col < W / hw + 1; col++) {
+      const cx = col * hw + (row % 2 ? hw / 2 : 0), cy = row * r * 1.5;
+      x.beginPath();
+      for (let k = 0; k < 6; k++) { const a = Math.PI / 6 + (k * Math.PI) / 3; x.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); }
+      x.closePath(); x.stroke();
+    }
+    const v = x.createRadialGradient(W / 2, H / 2, H * 0.25, W / 2, H / 2, H * 0.75);
+    v.addColorStop(0, "rgba(0,0,0,0)"); v.addColorStop(1, "rgba(0,0,0,0.45)");
+    x.fillStyle = v; x.fillRect(0, 0, W, H);
+    return (bgCache = c);
   }
 
   let toastTimer = null;
@@ -164,7 +187,8 @@
     fire:     { label: "FIRE",   color: "#ff922b", good: true,  msg: "FIREBALL! Your problems are toast. 🔥" },
     acid:     { label: "ACID",   color: "#82c91e", good: true,  msg: "ACID BALL. Dissolves armor. And worries." },
     electric: { label: "ZAP",    color: "#15aabf", good: true,  msg: "ZAP BALL! Shocking, honestly. ⚡" },
-    heavy:    { label: "HEAVY",  color: "#7950f2", good: true,  msg: "WRECKING BALL. Nothing is safe. Not even steel." },
+    heavy:    { label: "HEAVY",  color: "#7950f2", good: true,  msg: "WRECKING BALL. Tough bricks break in one hit." },
+    boost:    { label: "BOOST",  color: "#fab005", good: false, msg: "⚡ SPEED BRICK! The ball is zooming." },
     shrink:   { label: "TINY",   color: "#e03131", good: false, msg: "💀 TINY PADDLE. Oh no. Anyway." },
     fast:     { label: "FAST",   color: "#e03131", good: false, msg: "💀 FAST BALL. Deep breaths. In… out…" },
     invert:   { label: "FLIP",   color: "#e03131", good: false, msg: "💀 CONTROLS FLIPPED. Left is right now. Embrace it." }
@@ -173,7 +197,7 @@
   const BAD_POOL = ["shrink", "fast", "invert"];
   const BALL_TYPES = ["fire", "acid", "electric", "heavy"];
   const BALL_COLORS = { normal: null, fire: "#ff922b", acid: "#82c91e", electric: "#22b8cf", heavy: "#7950f2" };
-  const DURATION = { expand: 20, laser: 15, magnet: 15, slow: 15, shrink: 12, fast: 10, invert: 8, ball: 12 };
+  const DURATION = { boost: 5, expand: 20, laser: 15, magnet: 15, slow: 15, shrink: 12, fast: 10, invert: 8, ball: 12 };
 
   /* =========================================================
      LEVELS
@@ -200,8 +224,6 @@
   const BOSS_LINES = ["Ow! My agenda!", "Rude!", "Let's circle back…", "Per my last email!", "This could've been an email!", "Ouch! Synergy!", "Noted. 😠", "I'll remember this!"];
   const BOSS_AMMO = ["📧", "📅", "📎", "☕", "📊"];
 
-  function tierOf(n) { return n <= 10 ? 0 : n <= 25 ? 1 : n <= 50 ? 2 : 3; }
-
   function makeBrick(r, c, type, hp, rng) {
     return {
       x: MARGIN + c * (BW + GAP), y: TOP + r * (BH + GAP), w: BW, h: BH,
@@ -211,91 +233,64 @@
     };
   }
 
-  function pickType(tier, n, rng, r, rows) {
-    const x = rng();
-    const top = 1 - r / rows; // upper rows are tougher
-    if (tier === 0) {
-      if (n >= 6 && x < 0.04) return ["tnt", 1];
-      if (n >= 3 && x < 0.04 + 0.12 * top) return ["normal", 2];
-      return ["normal", 1];
-    }
-    const t = [
-      null,
-      { tnt: 0.05, steel: 0.06, regen: 0.03, h4: 0, h3: 0.05, h2: 0.25 },
-      { tnt: 0.06, steel: 0.09, regen: 0.05, h4: 0.05, h3: 0.12, h2: 0.22 },
-      { tnt: 0.07, steel: 0.11, regen: 0.07, h4: 0.1, h3: 0.15, h2: 0.2 }
-    ][tier];
-    let acc = 0;
-    if (x < (acc += t.tnt)) return ["tnt", 1];
-    if (x < (acc += t.steel)) return ["steel", 3];
-    if (x < (acc += t.regen)) return ["regen", 2];
-    if (x < (acc += t.h4 * (0.5 + top))) return ["normal", 4];
-    if (x < (acc += t.h3 * (0.5 + top))) return ["normal", 3];
-    if (x < (acc += t.h2)) return ["normal", 2];
-    return ["normal", 1];
-  }
+  const CELL = { S: ["steel", Infinity], T: ["tnt", 1], B: ["bonus", 1], P: ["power", 1], F: ["speed", 1], W: ["slowb", 1], R: ["regen", 2] };
 
   function buildLevel(n) {
+    const D = LV.LEVELS[n - 1];
     const rng = mulberry32(n * 9973 + 17);
-    const tier = tierOf(n);
-    const L = { n, tier, bricks: [], portals: null, boss: null, name: "" };
+    const L = { n, tier: D.tier, kind: D.kind, bricks: [], portals: null, boss: null, name: D.name, lives: D.lives, time: D.time };
 
-    if (n % 10 === 0) { // boss stage
-      const bi = Math.min(BOSSES.length - 1, n / 10 - 1);
+    if (D.kind === "boss") {
+      const bi = Math.min(BOSSES.length - 1, n / 20 - 1);
       L.name = "BOSS: " + BOSSES[bi];
-      const hp = 24 + n * 1.2;
+      const hp = Math.round(24 + n * 0.35);
       L.boss = { x: W / 2, y: 170, w: 190, h: 110, hp, maxHp: hp, t: 0, fireT: 2.5, flash: 0, say: "", sayT: 0, alive: true };
       // a shield row under the boss (does not need clearing)
       for (let c = 0; c < COLS; c++) {
         if (c % 3 === 1) continue;
-        const b = makeBrick(9, c, tier >= 2 && c % 2 ? "regen" : "normal", tier >= 1 ? 2 : 1, rng);
+        const b = makeBrick(10, c, D.tier >= 2 && c % 2 ? "regen" : "normal", D.tier >= 1 ? 2 : 1, rng);
         b.optional = true;
         L.bricks.push(b);
       }
       return L;
     }
 
-    const key = n === 1 ? "wall" : n <= SHAPE_ORDER.length ? SHAPE_ORDER[n - 1] : SHAPE_ORDER[Math.floor(rng() * SHAPE_ORDER.length)];
-    const shape = SHAPES[key];
-    L.name = shape.name;
-    const rows = n === 1 ? 5 : Math.min(shape.rows + (tier >= 2 ? 1 : 0), shape.grid ? shape.grid.length : 11);
-    const filled = (r, c) => shape.grid ? shape.grid[r] && shape.grid[r][c] === "X" : shape.fn(r, c);
-
-    // which rows slide side to side (advanced+)
-    const movingRows = new Set();
-    if (tier >= 2) {
-      movingRows.add(1 + Math.floor(rng() * (rows - 1)));
-      if (tier >= 3 && rng() < 0.6) movingRows.add(Math.floor(rng() * rows));
-    }
-
-    for (let r = 0; r < rows; r++) {
-      const moving = movingRows.has(r);
-      for (let c = 0; c < COLS; c++) {
-        let on = filled(r, c);
-        if (moving) on = c % 2 === 1 && c < 9; // spaced out so they can slide
-        if (!on) continue;
-        const [type, hp] = n === 1 ? ["normal", 1] : pickType(tier, n, rng, r, rows);
-        const b = makeBrick(r, c, moving && type === "steel" ? "normal" : type, hp, rng);
-        if (moving) b.moving = { amp: BW + GAP, speed: 0.8 + rng() * 0.6, phase: rng() * 6.28 };
+    const movingRows = new Set(D.movingRows);
+    D.grid.forEach((row, r) => [...row].forEach((ch, c) => {
+      if (ch === ".") return;
+      const moving = movingRows.has(r) && ch !== "S";
+      if (moving && (c % 2 === 0 || c === COLS - 1)) return; // spaced out so the row can slide
+      const [type, hp] = CELL[ch] || ["normal", +ch];
+      const b = makeBrick(r, c, type, hp, rng);
+      if (moving) b.moving = { amp: BW + GAP, speed: 0.8 + rng() * 0.6, phase: rng() * 6.28 };
+      L.bricks.push(b);
+    }));
+    // indestructible bars that slide back and forth
+    D.movers.forEach((m) => {
+      for (let k = 0; k < m.len; k++) {
+        const b = makeBrick(m.row, k, "steel", Infinity, rng);
+        b.sweep = { k, len: m.len, speed: m.speed, phase: m.phase };
         L.bricks.push(b);
       }
-    }
-    // intermediate+: steel shields with a narrow entry gap under the formation
-    if (tier >= 1 && rng() < 0.45) {
-      const gap = 1 + Math.floor(rng() * 8);
-      for (let c = 0; c < COLS; c++) {
-        if (c === gap || c === gap + 1 || rng() < 0.25) continue;
-        L.bricks.push(makeBrick(rows + 1, c, "steel", 3, rng));
-      }
-    }
-    // never leave a level with nothing breakable
-    if (!L.bricks.some((b) => b.type !== "steel")) L.bricks.push(makeBrick(0, 4, "normal", 1, rng));
-
-    if ((tier === 2 && rng() < 0.3) || tier === 3) {
-      const py = TOP + (rows + 3) * (BH + GAP) + 30;
-      L.portals = [{ x: 80, y: Math.min(py, 560), hue: 280 }, { x: W - 80, y: Math.min(py, 560), hue: 190 }];
-    }
+    });
+    if (D.kind === "survival") L.surv = { next: 14, destroyed: 0, every: 14 };
     return L;
+  }
+
+  function survivalRow(rng) {
+    const row = [];
+    const t = level ? levelTime : 0;
+    for (let c = 0; c < COLS; c++) {
+      if (Math.random() < 0.12) continue;
+      const x = Math.random();
+      let type = "normal", hp = 1 + (x < 0.15 + t * 0.002 ? 1 : 0) + (x < 0.05 + t * 0.001 ? 1 : 0);
+      const y = Math.random();
+      if (y < 0.04) { type = "tnt"; hp = 1; } else if (y < 0.07) { type = "bonus"; hp = 1; } else if (y < 0.1) { type = "power"; hp = 1; }
+      const b = makeBrick(0, c, type, hp, rng);
+      b.color = ROW_COLORS[Math.floor(t / 14) % ROW_COLORS.length];
+      row.push(b);
+    }
+    return row;
   }
 
   /* =========================================================
@@ -316,8 +311,9 @@
     return w;
   }
   function ballSpeed() {
-    let s = TIER_SPEED[level.tier] + (level.n % 10) * 4;
-    if (level.tier >= 2) s *= 1 + Math.min(0.25, roundTime * 0.004);
+    let s = TIER_SPEED[level.tier] + (level.n % 10) * 3;
+    if (level.tier >= 3) s *= 1 + Math.min(0.2, roundTime * 0.003);
+    if (effects.boost) s *= 1.3;
     if (effects.slow) s *= 0.65;
     if (effects.fast) s *= 1.35;
     return s;
@@ -327,21 +323,19 @@
     return { x: paddle.x, y: PADDLE_Y - BALL_R, dx: 0, dy: -1, stuck: !!stuck, off: rand(-12, 12), stickT: 0, idle: 0, trail: [], dead: false, portalCd: 0 };
   }
 
-  function startGame(fromLevel) {
-    score = 0; lives = 3; nextLifeAt = LIFE_EVERY;
-    loadLevel(fromLevel || 1);
-    updateHud();
-  }
+  function startGame(n) { loadLevel(n || 1); }
 
   function loadLevel(n) {
     level = buildLevel(n);
     bricks = level.bricks;
+    score = 0; lives = level.lives; nextLifeAt = LIFE_EVERY;
     capsules = []; lasers = []; shots = []; particles = []; arcs = []; pending = [];
     effects = {}; ballType = "normal"; shield = 0; combo = 0;
     levelTime = 0; livesLostInLevel = 0;
     paddle.x = W / 2; paddle.w = PADDLE_W; paddle.stun = 0; paddle.targetX = null;
     resetRound();
-    banner = { text: level.boss ? level.name : "Level " + n, sub: level.boss ? "Defeat it to win!" : level.name, t: 2.6 };
+    const info = LV.SPECIAL_INFO[level.kind];
+    banner = { text: level.boss ? level.name : "Level " + n, sub: info ? info.icon + " " + info.desc : level.name, t: info ? 3.4 : 2.6 };
     state = "play";
     hideOverlay();
     updateHud();
@@ -464,12 +458,14 @@
     const cx = br.x + br.w / 2, cy = br.y + br.h / 2;
 
     if (br.type === "steel") {
-      if (source === "ball" && ballType === "heavy") {
-        br.hp--; shake = Math.max(shake, 5);
-        if (br.hp <= 0) { destroyBrick(br); return true; }
-        sfx.steel(); burst(cx, cy, "#adb5bd", 6, 140);
-      } else if (source === "ball" || source === "laser") {
+      // indestructible: it can never break, it just throws sparks
+      if (source === "ball" || source === "laser") {
         sfx.steel();
+        const sx = ball ? clamp(ball.x, br.x, br.x + br.w) : cx, sy = ball ? clamp(ball.y, br.y, br.y + br.h) : cy;
+        for (let i = 0; i < 7 && particles.length < 500; i++) {
+          const a = Math.random() * Math.PI * 2, sp = rand(120, 320);
+          particles.push({ kind: "spark", x: sx, y: sy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.15, 0.35), max: 0.35, color: pick(["#ffffff", "#ffe066", "#ffd43b"]) });
+        }
       }
       return false;
     }
@@ -491,11 +487,16 @@
     combo++;
     comboShow = 1.2;
     const cx = br.x + br.w / 2, cy = br.y + br.h / 2;
-    const color = br.type === "steel" ? "#adb5bd" : br.type === "tnt" ? "#fa5252" : br.color;
+    const color = br.type === "tnt" ? "#fa5252" : br.type === "bonus" ? "#ffd43b" : br.type === "power" ? "#b197fc" : br.type === "speed" ? "#ff922b" : br.type === "slowb" ? "#66d9e8" : br.color;
     burst(cx, cy, color, 12);
     sfx.brk(combo);
-    const base = br.type === "steel" ? 300 : br.type === "tnt" ? 75 : br.type === "regen" ? 120 : 50 * br.maxHp;
+    const base = br.type === "tnt" ? 75 : br.type === "regen" ? 120 : br.type === "bonus" ? 500 : br.type === "power" ? 100 : 50 * br.maxHp;
     addScore(base, cx, cy);
+    if (level.surv) level.surv.destroyed++;
+    if (br.type === "bonus") { floatText("BONUS!", cx, cy - 18, "#ffd43b", 18); sfx.life(); burst(cx, cy, "#fff3bf", 10, 200); }
+    if (br.type === "power") { capsules.push({ x: cx, y: cy, type: pick(GOOD_POOL), vy: 150, wob: rand(0, 6) }); sfx.power(); return; }
+    if (br.type === "speed") { effects.boost = DURATION.boost; delete effects.slow; toast(POWERS.boost.msg); }
+    if (br.type === "slowb") { effects.slow = 6; delete effects.boost; toast("🐌 SLOW BRICK. Nice and easy."); }
 
     if (br.type === "tnt") {
       pending.push({ t: 0.09, fn: () => explode(cx, cy) });
@@ -542,9 +543,9 @@
   }
 
   function maybeDrop(x, y) {
-    const chance = [0.2, 0.17, 0.15, 0.13][level.tier];
+    const chance = [0.2, 0.17, 0.15, 0.13, 0.12][level.tier];
     if (Math.random() > chance || capsules.length > 4) return;
-    const badChance = [0, 0.15, 0.25, 0.3][level.tier];
+    const badChance = [0, 0.12, 0.2, 0.26, 0.3][level.tier];
     const type = Math.random() < badChance ? pick(BAD_POOL) : pick(GOOD_POOL);
     capsules.push({ x, y, type, vy: 150, wob: rand(0, 6) });
   }
@@ -618,10 +619,13 @@
     updateCapsules(dt);
     if (level.boss) updateBoss(dt);
 
+    if (level.time && state === "play" && levelTime >= level.time) return timeUp();
+    if (level.surv && state === "play") updateSurvival(dt);
+
     // win / lose
     if (state === "play") {
       if (level.boss && !level.boss.alive) { if (level.boss.deathT <= 0) levelClear(); }
-      else if (!level.boss && aliveBreakable().length === 0) levelClear();
+      else if (!level.boss && !level.surv && aliveBreakable().length === 0) levelClear();
       else if (balls.length === 0) loseLife();
     }
   }
@@ -637,10 +641,25 @@
     paddle.x = clamp(paddle.x, paddle.w / 2 + 4, W - paddle.w / 2 - 4);
   }
 
+  function updateSurvival(dt) {
+    const sv = level.surv;
+    sv.next -= dt;
+    if (sv.next <= 0 || aliveBreakable().length === 0) {
+      sv.every = Math.max(7, sv.every - 0.6);
+      sv.next = sv.every;
+      for (const b of bricks) if (b.alive) { b.y += BH + GAP; b.row++; }
+      bricks = bricks.filter((b) => b.alive).concat(survivalRow(Math.random));
+      sfx.steel();
+      shake = Math.max(shake, 4);
+    }
+    if (bricks.some((b) => b.alive && b.y + b.h > PADDLE_Y - 70)) survivalEnd(true);
+  }
+
   function updateBricks(dt) {
     for (const b of bricks) {
       if (b.flash > 0) b.flash = Math.max(0, b.flash - dt * 5);
       if (!b.alive) continue;
+      if (b.sweep) { const bw = b.sweep.len * (BW + GAP) - GAP; b.x = MARGIN + (W - 2 * MARGIN - bw) * (0.5 + 0.5 * Math.sin(time * b.sweep.speed + b.sweep.phase)) + b.sweep.k * (BW + GAP); }
       if (b.moving) b.x = b.baseX + Math.sin(time * b.moving.speed + b.moving.phase) * b.moving.amp;
       if (b.regen > 0) {
         b.regen -= dt;
@@ -899,9 +918,20 @@
     shake = 8;
     effects = {}; ballType = "normal"; shield = 0; capsules = []; lasers = []; shots = [];
     updateHud();
-    if (lives <= 0) return gameOver();
+    if (lives <= 0) return level.surv ? survivalEnd(false) : gameOver();
     toast(pick(LOSE_LINES) + " " + lives + (lives === 1 ? " life" : " lives") + " left.");
     resetRound();
+  }
+
+  function starsHtml(stars) { return '<div class="stars" aria-label="' + stars + ' of 3 stars">' + [1, 2, 3].map((i) => "<span class='" + (i <= stars ? "" : "off") + "'>⭐</span>").join("") + "</div>"; }
+
+  function record(n, stars) {
+    prog.stars[n] = Math.max(prog.stars[n] || 0, stars);
+    const newBest = score > (prog.best[n] || 0);
+    if (newBest) prog.best[n] = score;
+    prog.unlocked = Math.max(prog.unlocked, Math.min(LV.TOTAL, n + 1));
+    saveProg();
+    return newBest;
   }
 
   function levelClear() {
@@ -909,33 +939,30 @@
     sfx.clear();
     const par = level.boss ? 90 : 40 + aliveCountAtStart() * 0.9;
     const lifeBonus = lives * 500;
-    const timeBonus = Math.max(0, Math.round((par - levelTime) * 25));
+    const timeBonus = level.time ? Math.round((level.time - levelTime) * 40) : Math.max(0, Math.round((par - levelTime) * 25));
     const goodActive = Object.keys(effects).filter((k) => k === "ball" || (POWERS[k] && POWERS[k].good)).length + (shield ? 1 : 0);
     const powerBonus = goodActive * 250;
-    const total = lifeBonus + timeBonus + powerBonus;
-    score += total;
-    while (score >= nextLifeAt) { nextLifeAt += LIFE_EVERY; lives++; }
-    const stars = 1 + (livesLostInLevel === 0 ? 1 : 0) + (levelTime < par ? 1 : 0);
+    score += lifeBonus + timeBonus + powerBonus;
+    let stars;
+    if (level.time) { const left = (level.time - levelTime) / level.time; stars = 1 + (left > 0.25 ? 1 : 0) + (left > 0.5 ? 1 : 0); }
+    else if (level.kind === "limited") stars = 1 + (levelTime < par * 1.3 ? 1 : 0) + (levelTime < par ? 1 : 0);
+    else stars = 1 + (livesLostInLevel === 0 ? 1 : 0) + (levelTime < par ? 1 : 0);
     const n = level.n;
-    starMap[n] = Math.max(starMap[n] || 0, stars);
-    store.set("nsh-bb-stars", JSON.stringify(starMap));
-    maxLevel = Math.max(maxLevel, n + 1);
-    store.set("nsh-bb-level", maxLevel);
-    saveBest();
+    const newBest = record(n, stars);
     updateHud();
 
     const lines = ["Your problems: smashed.", "Bricks: 0. You: 1.", "That was therapeutic.", "Look at you go!", "Stress levels critically low. 😌"];
     showOverlay(
-      '<span class="emoji-big">' + (level.boss ? "🏆" : "🎉") + "</span>" +
+      '<span class="emoji-big">' + (level.boss ? "🏆" : level.kind === "fortress" ? "🏰" : "🎉") + "</span>" +
       "<h2>" + (level.boss ? "Boss defeated!" : "Level " + n + " cleared!") + "</h2>" +
-      "<p class='muted'>" + pick(lines) + "</p>" +
-      '<div class="stars" aria-label="' + stars + ' of 3 stars">' + [1, 2, 3].map((i) => "<span class='" + (i <= stars ? "" : "off") + "'>⭐</span>").join("") + "</div>" +
+      "<p class='muted'>" + pick(lines) + "</p>" + starsHtml(stars) +
       '<table class="bonus-table">' +
       "<tr><td>❤️ Lives left × 500</td><td>+" + lifeBonus.toLocaleString() + "</td></tr>" +
-      "<tr><td>⏱️ Speed bonus (" + Math.round(levelTime) + "s)</td><td>+" + timeBonus.toLocaleString() + "</td></tr>" +
+      "<tr><td>⏱️ " + (level.time ? "Time left (" + Math.round(level.time - levelTime) + "s)" : "Speed bonus (" + Math.round(levelTime) + "s)") + "</td><td>+" + timeBonus.toLocaleString() + "</td></tr>" +
       "<tr><td>✨ Unused power-ups</td><td>+" + powerBonus.toLocaleString() + "</td></tr>" +
-      "<tr class='total'><td>Score</td><td>" + score.toLocaleString() + "</td></tr></table>" +
-      '<div class="btn-row"><button class="ov-btn" data-act="next">Next level →</button></div>',
+      "<tr class='total'><td>Score" + (newBest ? " · 🏅 new best!" : "") + "</td><td>" + score.toLocaleString() + "</td></tr></table>" +
+      '<div class="btn-row">' + (n < LV.TOTAL ? '<button class="ov-btn" data-act="next">Next level →</button>' : "") +
+      '<button class="ov-btn secondary" data-act="retry">↺ Replay</button><button class="ov-btn secondary" data-act="levels">Levels</button></div>',
       true
     );
   }
@@ -943,26 +970,44 @@
 
   function gameOver() {
     state = "over";
-    const isBest = score > best;
-    saveBest();
     const n = level.n;
     showOverlay(
       '<span class="emoji-big">🫠</span>' +
       "<h2>Out of lives.</h2>" +
       "<p class='muted'>…but not out of chill. Nobody's grading this.</p>" +
-      "<p style='font-size:1.3rem;font-weight:700;margin-top:12px'>" + score.toLocaleString() + " points" + (isBest ? " 🏅 New best!" : "") + "</p>" +
-      "<p class='muted'>Reached level " + n + " · Best " + best.toLocaleString() + "</p>" +
-      '<div class="btn-row">' +
-      '<button class="ov-btn" data-act="retry">Retry level ' + n + "</button>" +
-      '<button class="ov-btn secondary" data-act="restart">Start from level 1</button></div>',
+      "<p style='font-size:1.2rem;font-weight:700;margin-top:12px'>" + score.toLocaleString() + " points · " + aliveBreakable().length + " bricks left</p>" +
+      '<div class="btn-row"><button class="ov-btn" data-act="retry">Retry level ' + n + '</button><button class="ov-btn secondary" data-act="levels">Levels</button></div>',
       true
     );
   }
 
-  function saveBest() {
-    if (score > best) { best = score; store.set("nsh-bb-best", best); }
-    updateHud();
+  function timeUp() {
+    state = "over";
+    sfx.lose();
+    showOverlay(
+      '<span class="emoji-big">⏰</span><h2>Time\'s up!</h2>' +
+      "<p class='muted'>" + aliveBreakable().length + " bricks were still standing. They got lucky.</p>" +
+      '<div class="btn-row"><button class="ov-btn" data-act="retry">Try again</button><button class="ov-btn secondary" data-act="levels">Levels</button></div>',
+      true
+    );
   }
+
+  function survivalEnd(crushed) {
+    state = "clear";
+    const d = level.surv.destroyed;
+    const stars = d >= 90 ? 3 : d >= 55 ? 2 : d >= 25 ? 1 : 0;
+    if (stars) { sfx.clear(); record(level.n, stars); } else sfx.lose();
+    showOverlay(
+      '<span class="emoji-big">' + (stars ? "♾️" : "🧱") + "</span><h2>" + (crushed ? "The wall got you!" : "Survival over!") + "</h2>" +
+      "<p>You smashed <b>" + d + "</b> bricks and scored <b>" + score.toLocaleString() + "</b>.</p>" +
+      (stars ? starsHtml(stars) : "<p class='muted'>Smash 25 bricks to pass this level.</p>") +
+      '<div class="btn-row">' + (stars && level.n < LV.TOTAL ? '<button class="ov-btn" data-act="next">Next level →</button>' : "") +
+      '<button class="ov-btn ' + (stars ? "secondary" : "") + '" data-act="retry">↺ Try again</button><button class="ov-btn secondary" data-act="levels">Levels</button></div>',
+      true
+    );
+  }
+
+  function saveBest() { updateHud(); }
 
   function pause() {
     if (state !== "play") return;
@@ -985,31 +1030,49 @@
 
   function showMenu() {
     state = "menu";
-    level = level || buildLevel(1);
-    if (!level.n) level = buildLevel(1);
-    const totalStars = Object.values(starMap).reduce((a, b) => a + b, 0);
+    if (!level) level = buildLevel(Math.min(prog.unlocked, LV.TOTAL));
+    const done = Object.keys(prog.stars).length;
     const legend = [
-      ["WIDE / ×3 / LASER", "bigger paddle, more balls, pew pew"],
-      ["MAGNET / SLOW", "catch & aim, slow-mo"],
-      ["SHIELD / +1 ♥", "safety net, extra life"],
-      ["FIRE / ACID / ZAP / HEAVY", "special balls"],
-      ["Red 💀 capsules", "traps! dodge them"],
-      ["💣 TNT · 🔩 Steel · ♻ Regen", "boom · unbreakable · heals"]
+      ["🔩 Steel", "indestructible — bounce around it"],
+      ["Darker bricks", "take 2–5 hits (dots = hits left)"],
+      ["💣 TNT · ★ Bonus", "boom · +500 points"],
+      ["? Power · » Speed · ≈ Slow", "power-up · faster · slower ball"],
+      ["♻ Regen", "heals if you're slow"],
+      ["Red 💀 capsules", "traps! dodge them"]
     ].map((l) => "<div><b>" + l[0] + "</b><br>" + l[1] + "</div>").join("");
     showOverlay(
       '<span class="emoji-big">🧱</span>' +
       "<h2>Brick Breaker</h2>" +
       "<p class='muted'>Smash your problems. They're bricks now.</p>" +
-      (best ? "<p class='muted'>Best: <b>" + best.toLocaleString() + "</b> · Stars: <b>" + totalStars + " ⭐</b></p>" : "") +
+      "<p class='muted'><b>" + done + "</b> / " + LV.TOTAL + " levels · <b>" + totalStars() + "</b> ⭐</p>" +
       '<div class="btn-row">' +
-      (maxLevel > 1 ? '<button class="ov-btn" data-act="continue">Continue · Level ' + maxLevel + "</button>" : "") +
-      '<button class="ov-btn ' + (maxLevel > 1 ? "secondary" : "") + '" data-act="new">' + (maxLevel > 1 ? "New game" : "Play") + "</button></div>" +
+      '<button class="ov-btn" data-act="continue">' + (prog.unlocked > 1 ? "Continue · Level " + prog.unlocked : "Play") + "</button>" +
+      '<button class="ov-btn secondary" data-act="levels">🗺️ All levels</button></div>' +
       '<div class="legend">' + legend + "</div>",
       true
     );
   }
 
+  let lvTab = null;
+  function showLevels(tab) {
+    if (state === "play") state = "paused";
+    if (tab == null) tab = lvTab != null ? lvTab : Math.max(0, LV.tierOf(Math.min(prog.unlocked, LV.TOTAL)));
+    lvTab = tab;
+    const T = LV.TIERS[tab];
+    const tabs = LV.TIERS.map((t, i) => '<button type="button" class="lv-tab' + (i === tab ? " on" : "") + '" data-act="tab" data-t="' + i + '">' + t.name + "<small>" + t.from + "–" + t.to + "</small></button>").join("");
+    let grid = "";
+    for (let n = T.from; n <= T.to; n++) {
+      const D = LV.LEVELS[n - 1], st = prog.stars[n] || 0, open = n <= prog.unlocked;
+      const sp = LV.SPECIAL_INFO[D.kind];
+      grid += '<button type="button" class="lv' + (open ? "" : " locked") + (n === prog.unlocked ? " next" : "") + (sp ? " special" : "") + '" data-act="lvl" data-n="' + n + '" title="' + (open ? "Level " + n + ": " + D.name.replace(/"/g, "") + (prog.best[n] ? " · best " + prog.best[n] : "") : "Locked") + '">' +
+        (sp ? '<i class="sp">' + sp.icon + "</i>" : "") + "<b>" + (open ? n : "🔒") + '</b><span class="st">' + (open ? [1, 2, 3].map((i) => (i <= st ? "★" : "☆")).join("") : "") + "</span></button>";
+    }
+    card.classList.add("wide");
+    showOverlay('<h2>🗺️ Levels</h2><p class="muted">Clear a level to unlock the next. Milestones every 10 levels!</p><div class="lv-tabs">' + tabs + '</div><div class="lv-grid">' + grid + '</div><div class="btn-row"><button class="ov-btn secondary" data-act="menu">← Back</button></div>', true);
+  }
+
   function showOverlay(html, cursor) {
+    if (!/lv-grid/.test(html)) card.classList.remove("wide");
     card.innerHTML = html;
     overlay.hidden = false;
     wrap.classList.toggle("show-cursor", !!cursor);
@@ -1027,7 +1090,10 @@
     audio();
     const act = b.dataset.act;
     if (act === "new" || act === "restart") startGame(1);
-    else if (act === "continue") startGame(maxLevel);
+    else if (act === "continue") startGame(Math.min(prog.unlocked, LV.TOTAL));
+    else if (act === "levels") showLevels();
+    else if (act === "tab") showLevels(+b.dataset.t);
+    else if (act === "lvl") { const n = +b.dataset.n; if (n <= prog.unlocked) startGame(n); else toast("🔒 Clear level " + (n - 1) + " first."); }
     else if (act === "next") loadLevel(level.n + 1);
     else if (act === "retry") startGame(level.n);
     else if (act === "resume") resume();
@@ -1047,7 +1113,7 @@
     hudScore.textContent = score.toLocaleString();
     hudLevel.textContent = level ? level.n : 1;
     hudLives.textContent = lives > 5 ? "❤️×" + lives : "❤️".repeat(Math.max(0, lives)) || "💔";
-    hudBest.textContent = Math.max(best, score).toLocaleString();
+    hudBricks.textContent = level && level.surv ? "♾️ " + level.surv.destroyed : level && level.boss ? "😈" : level ? aliveBreakable().length : 0;
   }
   let lastLives = 3;
   setInterval(() => { if (lives !== lastLives) { bump(hudLives); lastLives = lives; } }, 200);
@@ -1058,11 +1124,7 @@
   function draw() {
     const th = theme();
     ctx.save();
-    ctx.fillStyle = th.bg;
-    ctx.fillRect(0, 0, W, H);
-    // dotted background
-    ctx.fillStyle = th.dot;
-    for (let y = 20; y < H; y += 32) for (let x = 20; x < W; x += 32) ctx.fillRect(x, y, 2, 2);
+    ctx.drawImage(background(), 0, 0, W, H);
 
     if (shake > 0) ctx.translate(rand(-shake, shake) * 0.5, rand(-shake, shake) * 0.5);
 
@@ -1086,55 +1148,66 @@
 
   function drawBrick(b, th) {
     const x = b.x, y = b.y, w = b.w, h = b.h;
-    let top, bot;
-    if (b.type === "steel") { top = th.steel[0]; bot = th.steel[1]; }
-    else if (b.type === "tnt") { top = "#ff6b6b"; bot = "#c92a2a"; }
-    else if (b.type === "regen") { top = "#63e6be"; bot = "#0ca678"; }
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    if (b.type === "steel") {
+      // brushed metal, bevelled, riveted — clearly not breakable
+      const g = ctx.createLinearGradient(x, y, x + w * 0.4, y + h);
+      g.addColorStop(0, "#e9ecef"); g.addColorStop(0.45, "#adb5bd"); g.addColorStop(0.55, "#868e96"); g.addColorStop(1, "#495057");
+      ctx.fillStyle = g; rr(x, y, w, h, 3); ctx.fill();
+      ctx.save(); rr(x, y, w, h, 3); ctx.clip();
+      ctx.strokeStyle = "rgba(255,255,255,0.18)"; ctx.lineWidth = 1;
+      for (let k = -h; k < w; k += 7) { ctx.beginPath(); ctx.moveTo(x + k, y + h); ctx.lineTo(x + k + h, y); ctx.stroke(); }
+      ctx.restore();
+      ctx.strokeStyle = "rgba(0,0,0,0.55)"; ctx.lineWidth = 1.5; rr(x + 0.75, y + 0.75, w - 1.5, h - 1.5, 3); ctx.stroke();
+      ctx.strokeStyle = "rgba(255,255,255,0.55)"; ctx.beginPath(); ctx.moveTo(x + 3, y + 2); ctx.lineTo(x + w - 3, y + 2); ctx.stroke();
+      for (const [px, py] of [[5, 5], [w - 5, 5], [5, h - 5], [w - 5, h - 5]]) {
+        ctx.fillStyle = "#343a40"; ctx.beginPath(); ctx.arc(x + px, y + py, 2.2, 0, 7); ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.6)"; ctx.beginPath(); ctx.arc(x + px - 0.6, y + py - 0.6, 0.8, 0, 7); ctx.fill();
+      }
+      if (b.flash > 0) { ctx.fillStyle = "rgba(255,255,230," + b.flash * 0.8 + ")"; rr(x, y, w, h, 3); ctx.fill(); }
+      return;
+    }
+    let top, bot, label = null, labelColor = "#fff";
+    if (b.type === "tnt") { top = "#ff6b6b"; bot = "#c92a2a"; label = "TNT"; }
+    else if (b.type === "regen") { top = "#63e6be"; bot = "#0ca678"; label = "♻"; }
+    else if (b.type === "bonus") { top = "#ffe066"; bot = "#f59f00"; label = "★"; labelColor = "#7a4a00"; }
+    else if (b.type === "power") { top = "#d0bfff"; bot = "#7048e8"; label = "?"; }
+    else if (b.type === "speed") { top = "#ffc078"; bot = "#e8590c"; label = "»"; }
+    else if (b.type === "slowb") { top = "#99e9f2"; bot = "#1098ad"; label = "≈"; }
     else {
-      const darker = (b.maxHp - 1) * 0.16; // tougher bricks are darker
+      const darker = (b.maxHp - 1) * 0.14; // tougher bricks are darker
       top = shade(b.color, -darker + 0.08);
-      bot = shade(b.color, -darker - 0.15);
+      bot = shade(b.color, -darker - 0.18);
     }
     const g = ctx.createLinearGradient(0, y, 0, y + h);
     g.addColorStop(0, top); g.addColorStop(1, bot);
     ctx.fillStyle = g;
-    rr(x, y, w, h, 7);
+    if (b.type === "bonus" || b.type === "power") { ctx.shadowColor = top; ctx.shadowBlur = 8 + Math.sin(time * 5 + b.seed) * 4; }
+    rr(x, y, w, h, 6);
     ctx.fill();
-    // glossy top
+    ctx.shadowBlur = 0;
     ctx.fillStyle = "rgba(255,255,255,0.28)";
-    rr(x + 4, y + 3, w - 8, h * 0.32, 4);
+    rr(x + 4, y + 3, w - 8, h * 0.3, 4);
     ctx.fill();
-
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    if (b.type === "steel") {
-      ctx.fillStyle = "rgba(0,0,0,0.25)";
-      for (const [px, py] of [[6, 6], [w - 6, 6], [6, h - 6], [w - 6, h - 6]]) { ctx.beginPath(); ctx.arc(x + px, y + py, 2, 0, 7); ctx.fill(); }
-      if (b.hp < b.maxHp) drawCracks(b, 3 - b.hp + 1);
-    } else if (b.type === "tnt") {
-      ctx.fillStyle = "#fff";
-      ctx.font = "700 12px Fredoka, sans-serif";
-      ctx.fillText("💣 TNT", x + w / 2, y + h / 2 + 1);
-    } else if (b.type === "regen") {
+    if (label) {
+      ctx.fillStyle = labelColor;
+      ctx.font = "700 " + (label.length > 1 ? 11 : 15) + "px Fredoka, sans-serif";
+      ctx.fillText(label, x + w / 2, y + h / 2 + 1);
+    }
+    if (b.type === "regen" && b.hp < b.maxHp) {
+      drawCracks(b, 2);
+      ctx.fillStyle = "rgba(255,255,255,0.6)";
+      ctx.fillRect(x + 4, y + h - 4, (w - 8) * (1 - b.regen / 4), 2);
+    } else if (b.type === "normal" && b.maxHp > 1) {
       ctx.fillStyle = "rgba(255,255,255,0.9)";
-      ctx.font = "700 14px Fredoka, sans-serif";
-      ctx.fillText("♻", x + w / 2, y + h / 2 + 1);
-      if (b.hp < b.maxHp) {
-        drawCracks(b, 2);
-        ctx.fillStyle = "rgba(255,255,255,0.6)";
-        ctx.fillRect(x + 4, y + h - 4, (w - 8) * (1 - b.regen / 4), 2);
-      }
-    } else if (b.maxHp > 1) {
-      // pips show remaining hits
-      ctx.fillStyle = "rgba(255,255,255,0.85)";
-      const n = b.hp, sp = 8, sx = x + w / 2 - ((n - 1) * sp) / 2;
-      for (let i = 0; i < n; i++) { ctx.beginPath(); ctx.arc(sx + i * sp, y + h / 2 + 2, 2.4, 0, 7); ctx.fill(); }
+      const n = b.hp, sp = 7, sx = x + w / 2 - ((n - 1) * sp) / 2;
+      for (let i = 0; i < n; i++) { ctx.beginPath(); ctx.arc(sx + i * sp, y + h / 2 + 2, 2.3, 0, 7); ctx.fill(); }
       if (b.hp < b.maxHp) drawCracks(b, b.maxHp - b.hp);
     }
-
     if (b.flash > 0) {
       ctx.fillStyle = "rgba(255,255,255," + b.flash * 0.7 + ")";
-      rr(x, y, w, h, 7);
+      rr(x, y, w, h, 6);
       ctx.fill();
     }
   }
@@ -1200,7 +1273,7 @@
     ctx.shadowBlur = ballType === "normal" ? 8 : 18;
     const g = ctx.createRadialGradient(b.x - r * 0.35, b.y - r * 0.35, 1, b.x, b.y, r);
     if (ballType === "normal") {
-      g.addColorStop(0, isDark() ? "#ffffff" : "#6b6878"); g.addColorStop(1, col);
+      g.addColorStop(0, "#ffffff"); g.addColorStop(1, "#ced4da");
     } else {
       g.addColorStop(0, "#fff"); g.addColorStop(0.35, col); g.addColorStop(1, shade(col, -0.35));
     }
@@ -1334,6 +1407,9 @@
         ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
         ctx.fillStyle = p.color; ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
         ctx.restore();
+      } else if (p.kind === "spark") {
+        ctx.strokeStyle = p.color; ctx.lineWidth = 2; ctx.lineCap = "round";
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx * 0.03, p.y - p.vy * 0.03); ctx.stroke();
       } else if (p.kind === "ring") {
         ctx.strokeStyle = "#ff922b"; ctx.lineWidth = 4;
         ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (1 - a) + 10, 0, 7); ctx.stroke();
@@ -1363,6 +1439,20 @@
       ctx.fillStyle = e.color; rr(x, 10, Math.max(20, w * clamp(e.t / e.max, 0, 1)), 20, 10); ctx.fill();
       ctx.fillStyle = "#fff"; ctx.fillText(e.label, x + 8, 21);
       x += w + 6;
+    }
+    // time challenge / survival
+    if (level.time && state !== "menu") {
+      const left = Math.max(0, level.time - levelTime);
+      ctx.textAlign = "center"; ctx.font = "700 20px Fredoka, sans-serif";
+      ctx.fillStyle = left < 10 ? (Math.floor(time * 4) % 2 ? "#ff6b6b" : "#fff") : "#fff";
+      ctx.fillText("⏱ " + Math.ceil(left) + "s", W / 2, 22);
+    }
+    if (level.surv && state !== "menu") {
+      const k = level.surv.next / level.surv.every;
+      ctx.fillStyle = th.chip; rr(W / 2 - 80, 14, 160, 8, 4); ctx.fill();
+      ctx.fillStyle = k < 0.25 ? "#ff6b6b" : "#74c0fc"; rr(W / 2 - 80, 14, 160 * k, 8, 4); ctx.fill();
+      ctx.fillStyle = th.muted; ctx.font = "600 11px Fredoka, sans-serif"; ctx.textAlign = "center"; ctx.fillText("wall drops in " + Math.ceil(level.surv.next) + "s", W / 2, 34);
+      ctx.strokeStyle = "rgba(255,107,107,0.35)"; ctx.setLineDash([8, 8]); ctx.beginPath(); ctx.moveTo(0, PADDLE_Y - 70); ctx.lineTo(W, PADDLE_Y - 70); ctx.stroke(); ctx.setLineDash([]);
     }
     // combo (top-right)
     const m = mult();
@@ -1416,7 +1506,7 @@
 
   let last = performance.now();
   function frame(now) {
-    const dt = Math.min(1 / 30, (now - last) / 1000);
+    const dt = Math.max(0, Math.min(1 / 30, (now - last) / 1000));
     last = now;
     update(dt);
     draw();
@@ -1424,7 +1514,7 @@
   }
 
   resize();
-  level = buildLevel(Math.max(1, maxLevel));
+  level = buildLevel(Math.min(prog.unlocked, LV.TOTAL));
   bricks = level.bricks;
   balls = [newBall(true)];
   updateHud();
