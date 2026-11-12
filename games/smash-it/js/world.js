@@ -137,10 +137,6 @@
       this.camera = new THREE.PerspectiveCamera(40, 1, 0.05, 120);
       this.camera.position.set(0, 1.6, 5.4);
       this.camLook = new V3(0, 1.2, 0);
-      this.camMode = "auto";
-      this.orbit = { az: 0, el: 0.12 };
-      // free-move camera (WASD + mouse look)
-      this.free = { pos: new V3(0, 1.6, 5.4), yaw: 0, pitch: -0.08 };
       this.shakeAmt = 0;
       this.closeT = 0;
       this.timeScale = 1; this.slowT = 0;
@@ -205,7 +201,7 @@
       this.renderer.domElement.style.height = "100%";
       this.camera.aspect = w / h;
       // keep the character comfortably in frame on tall phones
-      this.camera.fov = w / h < 0.8 ? 52 : 40;
+      this.camera.fov = w / h < 0.8 ? 62 : 40;
       this.camera.updateProjectionMatrix();
     }
 
@@ -391,7 +387,7 @@
 
     shake(a) { this.shakeAmt = Math.max(this.shakeAmt, a); }
     slowmo(d) { if (S.settings && !S.settings.slowmo) return; this.slowT = Math.max(this.slowT, d || 0.7); }
-    closeUp(d) { this.closeT = Math.max(this.closeT, d || 1); }
+    closeUp() {} // camera is locked; kept so callers stay simple
 
     /* ---------- targets (Target mode) ---------- */
     spawnTarget() {
@@ -470,53 +466,11 @@
       this.updateCamera(rdt, buddy);
     }
 
-    enterFree() {
-      const d = new V3(); this.camera.getWorldDirection(d);
-      this.free.pos.copy(this.camera.position); this.free.pos.y = 1.6;
-      this.free.yaw = Math.atan2(-d.x, -d.z);
-      this.free.pitch = THREE.MathUtils.clamp(Math.asin(THREE.MathUtils.clamp(d.y, -1, 1)), -1.2, 0.9);
-      this.camMode = "free";
-    }
-    freeDir() { const F = this.free; return new V3(-Math.sin(F.yaw) * Math.cos(F.pitch), Math.sin(F.pitch), -Math.cos(F.yaw) * Math.cos(F.pitch)); }
-    // mv: x = strafe right, z = forward, turn = left(+)/right(-)
-    moveFree(rdt, mv, run) {
-      const F = this.free;
-      F.yaw += (mv.turn || 0) * rdt * 1.9;
-      const fwd = new V3(-Math.sin(F.yaw), 0, -Math.cos(F.yaw)), right = new V3(Math.cos(F.yaw), 0, -Math.sin(F.yaw));
-      const v = fwd.multiplyScalar(mv.z || 0).add(right.multiplyScalar(mv.x || 0));
-      if (v.lengthSq() > 1) v.normalize();
-      F.pos.addScaledVector(v, (run ? 6.5 : 3.6) * rdt);
-      F.pos.x = THREE.MathUtils.clamp(F.pos.x, -ARENA.x + 0.3, ARENA.x - 0.3);
-      F.pos.z = THREE.MathUtils.clamp(F.pos.z, ARENA.zBack + 0.3, 9);
-    }
-
-    updateCamera(rdt, buddy) {
-      if (this.camMode === "free") {
-        this.camera.position.lerp(this.free.pos, 1 - Math.exp(-rdt * 14));
-        this.camLook.copy(this.camera.position).add(this.freeDir());
-        this.camera.lookAt(this.camLook);
-        if (this.shakeAmt > 0) { const a = this.shakeAmt * 0.04; this.camera.position.add(new V3(R(-a, a), R(-a, a), R(-a, a))); this.shakeAmt = Math.max(0, this.shakeAmt - rdt * 12); }
-        return;
-      }
-      const focus = buddy ? buddy.com.clone() : new V3(0, 1, 0);
-      focus.x = THREE.MathUtils.clamp(focus.x, -4, 4);
-      focus.y = THREE.MathUtils.clamp(focus.y, 0.5, 3.5);
-      const head = buddy ? buddy.headPos() : new V3(0, 1.9, 0);
-      const modes = {
-        auto: { look: focus.clone().add(new V3(0, 0.2, 0)), dist: 5.3, h: 0.45, az: 0 },
-        front: { look: new V3(0, 1.15, 0).lerp(focus, 0.35), dist: 5.6, h: 0.35, az: 0 },
-        side: { look: focus.clone().add(new V3(0, 0.15, 0)), dist: 4.8, h: 0.4, az: 0.95 },
-        close: { look: head.clone().add(new V3(0, -0.12, 0)), dist: 2.1, h: 0.1, az: 0 },
-        wide: { look: new V3(0, 1.1, -0.6).lerp(focus, 0.3), dist: 9, h: 1.6, az: 0 }
-      };
-      let m = modes[this.camMode] || modes.auto;
-      if (this.closeT > 0) { this.closeT -= rdt; m = { look: head.clone().add(new V3(0, -0.15, 0)), dist: 2.6, h: 0.15, az: m.az }; }
-      const az = m.az + this.orbit.az, el = this.orbit.el;
-      const desired = m.look.clone().add(new V3(Math.sin(az) * m.dist * Math.cos(el), m.h + Math.sin(el) * m.dist, Math.cos(az) * m.dist * Math.cos(el)));
-      desired.y = Math.max(0.35, desired.y);
-      const k = 1 - Math.exp(-rdt * (this.closeT > 0 ? 8 : 4));
-      this.camera.position.lerp(desired, k);
-      this.camLook.lerp(m.look, k);
+    // one fixed, locked camera at the front of the room that sees the whole space
+    updateCamera(rdt) {
+      const tall = this.camera.aspect < 0.8;
+      this.camera.position.set(0, tall ? 3.8 : 2.6, tall ? 12.5 : 8.2);
+      this.camLook.set(0, tall ? 1.2 : 1.05, -0.9);
       this.camera.lookAt(this.camLook);
       if (this.shakeAmt > 0) {
         const a = this.shakeAmt * 0.04;
