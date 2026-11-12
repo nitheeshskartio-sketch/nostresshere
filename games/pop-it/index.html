@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Pop It · No Stress Here</title>
+  <meta name="description" content="A squishy, poppy, infinitely flippable pop it fidget toy." />
+  <script src="../../assets/js/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../../assets/css/base.css" />
+  <link rel="stylesheet" href="pop-it.css" />
+</head>
+<body>
+  <div class="bg-blobs" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+
+  <header class="site-header">
+    <a class="logo" href="../../index.html"><span class="logo-mark" aria-hidden="true"></span>No Stress <span class="here">Here</span></a>
+    <div class="header-actions">
+      <a class="pill-btn" href="../../index.html" title="Back to all games">← <span class="theme-label">Games</span></a>
+      <button class="pill-btn" type="button" data-theme-toggle aria-pressed="false">
+        <span class="theme-icon" aria-hidden="true"></span><span class="theme-label">Dark</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="container game-page">
+    <div class="game-head">
+      <h1>Pop It! <span class="wiggle" aria-hidden="true">🫧</span></h1>
+      <p class="muted" id="subtitle">Push. Pop. Flip. Repeat until enlightened.</p>
+    </div>
+
+    <!-- stats -->
+    <div class="stats">
+      <div class="stat">
+        <span class="stat-label">Pops</span>
+        <span class="stat-value" id="sessionPops">0</span>
+      </div>
+      <div class="stat stress">
+        <span class="stat-label">Stress level <span id="stressEmoji">😫</span></span>
+        <div class="meter" role="meter" aria-label="Stress level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" id="meter">
+          <div class="meter-fill" id="meterFill"></div>
+        </div>
+        <span class="stat-sub" id="stressText">100% — yikes</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Flips</span>
+        <span class="stat-value" id="flips">0</span>
+      </div>
+    </div>
+
+    <!-- board -->
+    <div class="stage">
+      <div class="combo" id="combo" aria-hidden="true"></div>
+      <div class="board-flip" id="boardFlip">
+        <div class="board" id="board" role="group" aria-label="Pop it board"></div>
+      </div>
+      <button class="flip-btn" id="flipBtn" type="button" hidden>
+        Flip it over 🔄 <kbd>F</kbd>
+      </button>
+    </div>
+    <p class="hint muted">Tip: tap a bubble, or <strong>drag your finger / mouse</strong> across to pop a whole row.</p>
+
+    <!-- controls -->
+    <div class="controls">
+      <div class="control-group" role="radiogroup" aria-label="Shape" id="shapePicker"></div>
+      <div class="control-group" role="radiogroup" aria-label="Colors" id="colorPicker"></div>
+      <div class="control-group">
+        <button class="chip" type="button" id="soundBtn" aria-pressed="true">🔊 Sound</button>
+        <button class="chip" type="button" id="hapticBtn" aria-pressed="true">📳 Buzz</button>
+        <button class="chip" type="button" id="resetBtn">↺ Un-pop all</button>
+      </div>
+    </div>
+
+    <p class="lifetime muted" id="lifetime"></p>
+  </main>
+
+  <footer class="site-footer">
+    No real silicone was harmed. Your thumbs might be though. 👍
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="pop-it.js"></script>
+</body>
+</html>

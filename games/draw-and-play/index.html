@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>Draw &amp; Play · No Stress Here</title>
+  <meta name="description" content="A level-based colouring book. Colour pages, earn stars, unlock new worlds." />
+  <script src="../../assets/js/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../../assets/css/base.css" />
+  <link rel="stylesheet" href="draw.css" />
+</head>
+<body class="draw-body">
+  <header class="site-header">
+    <a class="logo" href="../../index.html"><span class="logo-mark" aria-hidden="true"></span>No Stress <span class="here">Here</span></a>
+    <div class="header-actions">
+      <a class="pill-btn" href="../../index.html" title="Back to all games">← <span class="theme-label">Games</span></a>
+      <button class="pill-btn" type="button" data-theme-toggle aria-pressed="false">
+        <span class="theme-icon" aria-hidden="true"></span><span class="theme-label">Dark</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ============ LEVEL MAP ============ -->
+  <main class="screen map-screen" id="mapScreen">
+    <div class="map-head">
+      <div>
+        <h1>Draw <span class="amp">&amp;</span> Play <span class="crayon-emoji" aria-hidden="true">🖍️</span></h1>
+        <p class="muted">A colouring book that's secretly a game. No rules about colours — purple lions are encouraged.</p>
+      </div>
+      <div class="map-stats">
+        <div class="star-total" title="Total stars"><span>⭐</span><b id="totalStars">0</b></div>
+        <button class="pill-btn" type="button" id="galleryBtn">🖼️ Gallery</button>
+      </div>
+    </div>
+    <div class="worlds" id="worlds" role="tablist" aria-label="Worlds"></div>
+    <div class="world-head">
+      <h2 id="worldTitle"></h2>
+      <div class="world-progress"><div class="bar"><i id="worldBar"></i></div><span id="worldProg"></span></div>
+    </div>
+    <div class="levels" id="levels"></div>
+    <p class="unlock-hint muted" id="unlockHint"></p>
+  </main>
+
+  <!-- ============ GALLERY ============ -->
+  <main class="screen gallery-screen" id="galleryScreen" hidden>
+    <div class="map-head">
+      <div><h1>🖼️ My Gallery</h1><p class="muted">Every masterpiece you've finished. Frame-worthy, honestly.</p></div>
+      <button class="pill-btn" type="button" id="galleryBack">← Levels</button>
+    </div>
+    <div class="gallery" id="gallery"></div>
+  </main>
+
+  <!-- ============ PLAY ============ -->
+  <main class="screen play-screen" id="playScreen" hidden>
+    <div class="topbar">
+      <div class="tb-group">
+        <button class="tb" type="button" id="homeBtn" title="All levels">🏠</button>
+        <button class="tb" type="button" id="prevBtn" title="Previous level">◀</button>
+        <div class="level-title">
+          <b id="lvlTitle"></b>
+          <small id="lvlSub"></small>
+        </div>
+        <button class="tb" type="button" id="nextBtn" title="Next level">▶</button>
+      </div>
+      <div class="tb-group">
+        <div class="special" id="specialBadge" hidden></div>
+        <div class="timer" id="timer" hidden>⏱️ <b id="timerVal">3:00</b></div>
+        <div class="ring" id="ring" title="How much you've coloured"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" class="ring-bg"/><circle cx="18" cy="18" r="15" class="ring-fg" id="ringFg"/></svg><span id="ringPct">0%</span></div>
+      </div>
+      <div class="tb-group">
+        <button class="tb" type="button" id="undoBtn" title="Undo (Ctrl+Z)">↶</button>
+        <button class="tb" type="button" id="redoBtn" title="Redo (Ctrl+Y)">↷</button>
+        <button class="tb" type="button" id="resetBtn" title="Clear all colouring">🗑️</button>
+        <span class="sep"></span>
+        <button class="tb hide-sm" type="button" id="zoomOut" title="Zoom out">－</button>
+        <button class="tb" type="button" id="zoomFit" title="Fit page"><span id="zoomPct">100%</span></button>
+        <button class="tb hide-sm" type="button" id="zoomIn" title="Zoom in">＋</button>
+        <button class="tb" type="button" id="panBtn" title="Move the page (or hold Space / use two fingers)">✋</button>
+        <span class="sep"></span>
+        <button class="tb" type="button" id="saveBtn" title="Save">💾</button>
+        <button class="tb" type="button" id="downloadBtn" title="Download picture">⬇️</button>
+        <button class="finish" type="button" id="finishBtn" disabled>✅ <span>Finish</span></button>
+      </div>
+    </div>
+
+    <div class="workspace">
+      <aside class="toolbar" id="toolbar">
+        <div class="tools" id="tools"></div>
+        <div class="tool-settings" id="toolSettings">
+          <label><span>Size <b id="sizeVal">22</b></span><input type="range" id="size" min="2" max="90" value="22" /></label>
+          <label><span>Opacity <b id="opVal">100%</b></span><input type="range" id="opacity" min="10" max="100" value="100" /></label>
+          <label><span>Intensity <b id="inVal">100%</b></span><input type="range" id="intensity" min="25" max="100" value="100" /></label>
+          <div class="patterns" id="patterns" hidden></div>
+          <label class="toggle"><input type="checkbox" id="boundary" checked /> <span>🛡️ Stay inside the lines</span></label>
+        </div>
+      </aside>
+
+      <div class="book">
+        <div class="rings" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="viewport" id="viewport"></div>
+      </div>
+
+      <aside class="palette-panel" id="palettePanel">
+        <div class="current"><span class="cur-swatch" id="curSwatch"></span><div><b id="curName">Colour</b><small id="curHex"></small></div>
+          <label class="picker" title="Custom colour">🎨<input type="color" id="customColor" value="#ff6b6b" /></label></div>
+        <div class="pal-tabs" id="palTabs"></div>
+        <div class="swatches" id="swatches"></div>
+        <h4>Shades</h4>
+        <div class="swatches shades" id="shades"></div>
+        <div id="suggestBox" hidden><h4>💡 Suggested colours</h4><div class="swatches" id="suggest"></div></div>
+        <div id="recentBox"><h4>Recently used</h4><div class="swatches" id="recent"></div></div>
+      </aside>
+    </div>
+  </main>
+
+  <!-- ============ COMPLETION ============ -->
+  <div class="overlay" id="doneOverlay" hidden>
+    <canvas id="confetti" class="confetti"></canvas>
+    <div class="done-card">
+      <div class="done-art"><img id="doneImg" alt="Your finished picture" /></div>
+      <div class="done-info">
+        <h2 id="doneTitle">Beautiful!</h2>
+        <div class="done-stars" id="doneStars"></div>
+        <div class="done-score" id="doneScore"></div>
+        <table class="done-table" id="doneTable"></table>
+        <p class="unlocks" id="doneUnlocks"></p>
+        <div class="done-btns">
+          <button class="btn primary" type="button" id="doneNext">Next level ▶</button>
+          <button class="btn" type="button" id="doneKeep">Keep colouring</button>
+          <button class="btn" type="button" id="doneReplay">↺ Replay</button>
+          <button class="btn" type="button" id="doneDownload">⬇️ Download</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="msgOverlay" hidden><div class="msg-card" id="msgCard"></div></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/art.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Brick Breaker · No Stress Here</title>
+  <meta name="description" content="Smash your problems. They're bricks now." />
+  <script src="../../assets/js/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../../assets/css/base.css" />
+  <link rel="stylesheet" href="brick-breaker.css" />
+</head>
+<body>
+  <div class="bg-blobs" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+
+  <header class="site-header">
+    <a class="logo" href="../../index.html"><span class="logo-mark" aria-hidden="true"></span>No Stress <span class="here">Here</span></a>
+    <div class="header-actions">
+      <a class="pill-btn" href="../../index.html" title="Back to all games">← <span class="theme-label">Games</span></a>
+      <button class="pill-btn" type="button" data-theme-toggle aria-pressed="false">
+        <span class="theme-icon" aria-hidden="true"></span><span class="theme-label">Dark</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="bb-page">
+    <div class="hud" aria-live="off">
+      <div class="hud-item"><span class="hud-label">Score</span><span class="hud-value" id="hudScore">0</span></div>
+      <div class="hud-item"><span class="hud-label">Level</span><span class="hud-value" id="hudLevel">1</span></div>
+      <div class="hud-item"><span class="hud-label">Lives</span><span class="hud-value hearts" id="hudLives">❤️❤️❤️</span></div>
+      <div class="hud-item hide-sm"><span class="hud-label">Best</span><span class="hud-value" id="hudBest">0</span></div>
+      <div class="hud-btns">
+        <button class="icon-btn" type="button" id="soundBtn" title="Sound on/off" aria-label="Toggle sound">🔊</button>
+        <button class="icon-btn" type="button" id="pauseBtn" title="Pause (P)" aria-label="Pause">⏸</button>
+      </div>
+    </div>
+
+    <div class="bb-wrap" id="wrap">
+      <canvas id="game" aria-label="Brick Breaker game area"></canvas>
+
+      <div class="overlay" id="overlay">
+        <div class="overlay-card" id="overlayCard"></div>
+      </div>
+    </div>
+
+    <p class="bb-help muted">
+      <strong>Move:</strong> mouse, finger or ←/→ &nbsp;·&nbsp;
+      <strong>Launch:</strong> click, tap, Space or ↑ &nbsp;·&nbsp;
+      <strong>Pause:</strong> P
+    </p>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="brick-breaker.js"></script>
+</body>
+</html>

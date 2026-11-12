@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>Smash It · No Stress Here</title>
+  <meta name="description" content="A 3D stress-relief buddy. Put a face on it, then pie it, bonk it and throw it into cushions." />
+  <script src="../../assets/js/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../../assets/css/base.css" />
+  <link rel="stylesheet" href="smash-it.css" />
+</head>
+<body class="smash-body">
+  <header class="site-header">
+    <a class="logo" href="../../index.html"><span class="logo-mark" aria-hidden="true"></span>No Stress <span class="here">Here</span></a>
+    <div class="header-actions">
+      <a class="pill-btn" href="../../index.html" title="Back to all games">← <span class="theme-label">Games</span></a>
+      <button class="pill-btn" type="button" data-theme-toggle aria-pressed="false">
+        <span class="theme-icon" aria-hidden="true"></span><span class="theme-label">Dark</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="smash">
+    <div class="stage" id="stage">
+      <div class="bubble" id="bubble" aria-live="polite"></div>
+
+      <div class="hud-top">
+        <div class="hud-left">
+          <button class="mode-chip" id="modeBtn" type="button"><span id="modeIcon">🎈</span> <span id="modeName">Free Play</span> ▾</button>
+          <div class="vio" role="group" aria-label="Normal or Brutal">
+            <button type="button" id="vNormal" class="on" aria-pressed="true">😇 Normal</button>
+            <button type="button" id="vBrutal" aria-pressed="false">😈 Brutal</button>
+          </div>
+          <div class="hp" id="hp" hidden title="Buddy's health"><span>❤️</span><div class="hpbar"><i id="hpFill"></i></div><b id="hpVal">100</b></div>
+          <div class="stat-pill">
+            <span><b id="hits">0</b> hits</span>
+            <span class="combo" id="combo"></span>
+          </div>
+          <div class="stress-pill" title="Your stress level (it only goes down)">
+            <span id="stressLabel">Stressed 😤</span>
+            <div class="bar"><i id="stressFill"></i></div>
+          </div>
+        </div>
+        <div class="hud-right">
+          <button class="icon" type="button" data-panel="face" title="Upload a face">📷<small>Face</small></button>
+          <button class="icon" type="button" data-panel="char" title="Character">👕<small>Buddy</small></button>
+          <button class="icon" type="button" data-panel="room" title="Room">🏠<small>Room</small></button>
+          <button class="icon" type="button" id="camBtn" title="Camera angle (C)">🎥<small>Camera</small></button>
+          <button class="icon" type="button" id="styleBtn" title="Realistic / Cartoon">🎨<small>Style</small></button>
+          <button class="icon" type="button" id="soundBtn" title="Sound on/off">🔊</button>
+          <button class="icon" type="button" data-panel="settings" title="Settings">⚙️</button>
+          <button class="icon" type="button" id="resetBtn" title="Reset everything (R)">↺</button>
+        </div>
+      </div>
+
+      <div class="mode-hud" id="modeHud" hidden></div>
+      <div class="hint" id="hint">Click the buddy to hit · Drag them to throw</div>
+
+      <div class="bottom">
+        <div class="actions" id="actions"></div>
+        <div class="tray" id="tray" role="toolbar" aria-label="Objects"></div>
+      </div>
+
+      <div class="loading" id="loading"><div class="spinner"></div><div>Inflating the buddy…</div></div>
+    </div>
+
+    <aside class="panel" id="panel" aria-label="Options">
+      <div class="panel-head"><h3 id="panelTitle"></h3><button type="button" class="icon small" id="panelClose" aria-label="Close">✕</button></div>
+      <div class="panel-body" id="panelBody"></div>
+    </aside>
+
+    <div class="modal" id="modal" hidden><div class="modal-card" id="modalCard"></div></div>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="../../assets/vendor/three.js"></script>
+  <script src="../../assets/vendor/cannon-es.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/face.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/buddy.js"></script>
+  <script src="js/tools.js"></script>
+  <script src="js/brutal.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>

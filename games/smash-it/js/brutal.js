@@ -1,0 +1,331 @@
+/* ============ SMASH IT — Brutal mode extras: fire, petrol, gas cylinders, pistol, K.O. ghost ============ */
+(function () {
+  "use strict";
+  const S = (window.SMASH = window.SMASH || {});
+  const V3 = THREE.Vector3;
+  const R = (a, b) => a + Math.random() * (b - a);
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const FLAME = ["#ffd43b", "#ffa94d", "#fd7e14", "#f76707", "#e8590c", "#fab005"];
+  const BURN_LINES = ["HOT HOT HOT!", "Stop, drop and roll!", "WATER! WATER!", "Why is it always fire?!", "I'm toast!"];
+
+  class Brutal {
+    constructor(world, buddy, tools) {
+      this.world = world; this.buddy = buddy; this.tools = tools;
+      this.puddles = []; this.spots = []; this.tracers = []; this.ghosts = []; this.timers = [];
+      const W = world;
+      this.flame = new S.Particles(W.scene, new THREE.IcosahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.9, depthWrite: false }), 800);
+      W.fx.flame = this.flame;
+      this.fireLight = new THREE.PointLight("#ff8a2a", 0, 7, 1.6);
+      W.scene.add(this.fireLight);
+      this.fuelMat = new THREE.MeshStandardMaterial({ color: "#c9a227", transparent: true, opacity: 0.45, roughness: 0.05, metalness: 0.25, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 });
+      this.scorchMat = new THREE.MeshStandardMaterial({ color: "#1f1f1f", transparent: true, opacity: 0.45, roughness: 0.9, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 });
+      this.flameAcc = 0; this.lineT = 0; this.sootT = 0;
+      this.buildGun();
+      S.bus.on("gasBoom", (pos) => this.gasExplode(pos));
+      S.bus.on("death", () => this.later(0.9, () => this.spawnGhost()));
+    }
+
+    later(t, fn) { this.timers.push({ t, fn }); }
+
+    /* =========================================================
+       PETROL & FIRE
+       ========================================================= */
+    addFuel(p) {
+      let pd = this.puddles.find((q) => Math.hypot(q.x - p.x, q.z - p.z) < q.r * 0.85 + 0.12);
+      if (pd) {
+        pd.amount = Math.min(3, pd.amount + 0.025);
+        pd.r = Math.min(1.1, 0.22 + pd.amount * 0.32);
+        pd.mesh.scale.setScalar(pd.r);
+        if (pd.mesh.material !== this.fuelMat && !pd.burning) pd.mesh.material = this.fuelMat;
+        if (pd.burning > 0) pd.burning += 0.06;
+        return;
+      }
+      if (this.puddles.length >= 30) return;
+      const m = new THREE.Mesh(new THREE.CircleGeometry(1, 24), this.fuelMat);
+      m.rotation.x = -Math.PI / 2; m.position.set(p.x, 0.006 + this.puddles.length * 0.0003, p.z); m.scale.setScalar(0.22);
+      m.receiveShadow = true;
+      this.world.fxGroup.add(m);
+      this.puddles.push({ x: p.x, z: p.z, r: 0.22, amount: 0.1, mesh: m, burning: 0 });
+    }
+
+    petrolHit(pos, part) {
+      const B = this.buddy;
+      B.soak = Math.min(1, B.soak + 0.02);
+      if (B.burn > 0) { B.burn += 0.15; this.burst(pos, 6); }
+      if (Math.random() < 0.25) this.world.splash(pos, "#d4a72c", 3, 1.2, 0.016);
+      if (part === "head" && Math.random() < 0.08) B.react("sputter", 1, pick(["Is this… petrol?", "Why do I smell gasoline?", "Uh oh."]));
+    }
+
+    burst(pos, n, spread, speed) {
+      for (let i = 0; i < n; i++) {
+        this.flame.spawn({ pos: pos.clone().add(new V3(R(-1, 1), R(-0.3, 1), R(-1, 1)).multiplyScalar(spread || 0.15)), vel: new V3(R(-1, 1), R(0.5, 2), R(-1, 1)).multiplyScalar(speed || 1.5), size: R(0.06, 0.16), life: R(0.35, 0.8), color: pick(FLAME), gravity: -2, drag: 1.5, floor: false });
+      }
+    }
+
+    // set fire to whatever is near a point
+    ignite(point, radius) {
+      radius = radius || 0.5;
+      let any = false;
+      for (const pd of this.puddles) if (!pd.burning && pd.amount > 0 && Math.hypot(pd.x - point.x, pd.z - point.z) < pd.r + radius) { pd.burning = 3 + pd.amount * 4; any = true; }
+      const B = this.buddy;
+      if (B.approxHit(point) || B.com.distanceTo(point) < radius + 0.55) { this.burnBuddy(); any = true; }
+      for (const p of this.world.props) if (p.explosive && p.mesh.position.distanceTo(point) < radius + 0.45) p.heat = Math.max(p.heat || 0, 1.1);
+      if (!any) this.spots.push({ x: point.x, y: Math.max(0.02, point.y), z: point.z, t: 2.5 });
+      this.burst(point, 18, 0.2, 2);
+      S.audio.play("ignite");
+      S.bus.emit("ignite", {});
+    }
+
+    burnBuddy() {
+      const B = this.buddy;
+      const dur = 4 + B.soak * 9;
+      if (B.burn <= 0) B.react("scared", 1.5, pick(BURN_LINES));
+      B.burn = Math.max(B.burn, dur);
+      B.soak = 0;
+    }
+
+    douse(pos, radius) {
+      let n = 0;
+      for (const pd of this.puddles) if (pd.burning > 0 && Math.hypot(pd.x - pos.x, pd.z - pos.z) < pd.r + radius) { pd.burning = Math.max(0, pd.burning - 0.5); n++; }
+      for (const sp of this.spots) if (Math.hypot(sp.x - pos.x, sp.z - pos.z) < radius + 0.3) sp.t = 0;
+      if (n && Math.random() < 0.2) { this.world.puff(pos, 3, "#e9ecef"); S.audio.play("steam"); }
+    }
+    douseBuddy(pos) {
+      const B = this.buddy;
+      if (B.burn > 0) {
+        B.burn = Math.max(0, B.burn - 0.6);
+        this.world.puff(pos, 2, "#e9ecef");
+        if (B.burn <= 0) { S.audio.play("steam"); B.react("sputter", 1.4, pick(["Phew!", "Thank you!", "I'm extra crispy."])); }
+      }
+      B.soak = Math.max(0, B.soak - 0.05);
+    }
+
+    /* =========================================================
+       GAS CYLINDERS
+       ========================================================= */
+    placeGas(point, onBuddy) {
+      const A = S.ARENA, B = this.buddy;
+      const p = point.clone();
+      if (onBuddy) { p.copy(B.com).add(new V3(R(0.55, 0.75) * (Math.random() < 0.5 ? -1 : 1), 0, R(0.2, 0.4))); }
+      p.x = THREE.MathUtils.clamp(p.x, -A.x + 0.4, A.x - 0.4);
+      p.z = THREE.MathUtils.clamp(p.z, A.zBack + 0.4, A.zFront - 0.4);
+      if (!onBuddy && Math.hypot(p.x - B.com.x, p.z - B.com.z) < 0.45) p.x += 0.55;
+      const g = new THREE.Group();
+      const red = new THREE.MeshStandardMaterial({ color: "#d62828", roughness: 0.35, metalness: 0.35 });
+      const steel = new THREE.MeshStandardMaterial({ color: "#ced4da", roughness: 0.25, metalness: 0.9 });
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.56, 24), red); g.add(body);
+      const top = new THREE.Mesh(new THREE.SphereGeometry(0.16, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), red); top.position.y = 0.28; g.add(top);
+      const bot = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.16, 0.04, 24), steel); bot.position.y = -0.3; g.add(bot);
+      const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.1, 12), steel); neck.position.y = 0.48; g.add(neck);
+      const valve = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.012, 8, 18), steel); valve.position.y = 0.54; valve.rotation.x = Math.PI / 2; g.add(valve);
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.162, 0.162, 0.08, 24), new THREE.MeshStandardMaterial({ color: "#f8f9fa", roughness: 0.5 })); band.position.y = 0.05; g.add(band);
+      const prop = this.world.addProp({ kind: "gas", mesh: g, shapes: [[new CANNON.Cylinder(0.16, 0.16, 0.82, 12), new CANNON.Vec3(0, 0.1, 0)]], mass: 6, pos: [p.x, 0.33, p.z], breakable: true, threshold: 9, color: "#d62828" });
+      prop.explosive = true; prop.heat = 0;
+      const gas = this.world.props.filter((q) => q.explosive);
+      if (gas.length > 6) { const old = gas[0]; old.broken = true; this.world.propGroup.remove(old.mesh); this.world.physics.removeBody(old.body); this.world.props = this.world.props.filter((q) => q !== old); }
+      S.audio.play("clank");
+      S.bus.emit("placeGas", {});
+    }
+
+    gasExplode(pos) {
+      const W = this.world, B = this.buddy;
+      this.boomSrc = "gas";
+      this.tools.explode(pos.clone().add(new V3(0, 0.2, 0)), true);
+      this.boomSrc = null;
+      for (let i = 0; i < 70; i++) this.flame.spawn({ pos: pos.clone().add(new V3(R(-0.3, 0.3), R(0, 0.6), R(-0.3, 0.3))), vel: new V3(R(-4, 4), R(1, 7), R(-4, 4)), size: R(0.12, 0.3), life: R(0.5, 1.1), color: pick(FLAME), gravity: -1, drag: 2.2, floor: false });
+      W.shake(18); W.slowmo(0.9);
+      const d = B.com.distanceTo(pos);
+      if (d < 3.2) B.damage(55 * (1 - d / 3.2), "gas");
+      this.ignite(pos, 1.3);
+      // chain reaction
+      for (const p of W.props) if (p.explosive && p.mesh.position.distanceTo(pos) < 2.4) p.heat = Math.max(p.heat || 0, 1.35);
+      S.bus.emit("gasBoom2", {});
+    }
+
+    onExplosion(pos) {
+      const B = this.buddy, d = B.com.distanceTo(pos);
+      if (d < 3) B.damage(30 * (1 - d / 3), this.boomSrc || "dynamite");
+      if (d < 1.4) this.burnBuddy();
+      for (const pd of this.puddles) if (Math.hypot(pd.x - pos.x, pd.z - pos.z) < pd.r + 1) pd.burning = Math.max(pd.burning, 3 + pd.amount * 4);
+      for (const p of this.world.props) if (p.explosive && p.mesh.position.distanceTo(pos) < 2.2) p.heat = Math.max(p.heat || 0, 1.35);
+    }
+
+    /* =========================================================
+       PISTOL
+       ========================================================= */
+    buildGun() {
+      const W = this.world;
+      if (!W.camera.parent) W.scene.add(W.camera);
+      const g = new THREE.Group();
+      const dark = new THREE.MeshStandardMaterial({ color: "#2b2d31", roughness: 0.35, metalness: 0.7 });
+      const grip = new THREE.MeshStandardMaterial({ color: "#5c3d2e", roughness: 0.7 });
+      const slide = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.05, 0.26), dark); slide.position.set(0, 0.03, 0.06); g.add(slide);
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.04, 10), dark); barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0.03, 0.2); g.add(barrel);
+      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.13, 0.06), grip); handle.position.set(0, -0.05, -0.04); handle.rotation.x = -0.25; g.add(handle);
+      const guard = new THREE.Mesh(new THREE.TorusGeometry(0.025, 0.006, 6, 12, Math.PI), dark); guard.position.set(0, -0.005, 0.02); guard.rotation.y = Math.PI / 2; g.add(guard);
+      this.muzzle = new THREE.Object3D(); this.muzzle.position.set(0, 0.03, 0.23); g.add(this.muzzle);
+      this.flash = new THREE.PointLight("#ffd27a", 0, 5, 2); this.flash.position.set(0, 0.03, 0.3); g.add(this.flash);
+      this.flashMesh = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), new THREE.MeshBasicMaterial({ color: "#ffd166", transparent: true, opacity: 0 })); this.flashMesh.position.copy(this.muzzle.position); g.add(this.flashMesh);
+      g.position.set(0.24, -0.2, -0.55);
+      g.visible = false;
+      W.camera.add(g);
+      this.gun = g; this.recoil = 0;
+    }
+    showGun(on) { this.gun.visible = !!on; }
+
+    shoot(ndc) {
+      const W = this.world, B = this.buddy;
+      const ray = W.rayFrom(ndc);
+      const dir = ray.ray.direction.clone();
+      const list = B.hitMeshes.concat(W.targetMeshes(), W.propGroup.children, W.solids);
+      const h = ray.intersectObjects(list, true)[0];
+      const from = this.muzzle.getWorldPosition(new V3());
+      const end = h ? h.point.clone() : ray.ray.at(30, new V3());
+      S.audio.play("bang");
+      this.recoil = 1; this.flash.intensity = 6; this.flashMesh.material.opacity = 1;
+      W.shake(1.6);
+      // tracer
+      const geo = new THREE.BufferGeometry().setFromPoints([from, end]);
+      const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: "#ffe8a3", transparent: true, opacity: 0.9 }));
+      W.fxGroup.add(line); this.tracers.push({ line, t: 0.08 });
+      if (!h) return;
+      let o = h.object;
+      if (o.userData.part) {
+        const head = o.userData.part === "head";
+        B.applyHit({ dir, power: head ? 6 : 4, point: h.point, part: o.userData.part, tool: { id: "gun", react: head ? ["ko", 1.2, "brutal"] : null }, dmg: head ? 25 : 12 });
+        this.tools.gore(h.point, dir, o.userData.part, o, head ? 9 : 6);
+        if (B.burn <= 0 && B.soak > 0.3 && Math.random() < 0.3) this.burnBuddy();
+        S.bus.emit("hit", { tool: "gun", part: o.userData.part, power: head ? 9 : 6, flying: B.state === "fly" });
+        if (head) S.bus.emit("headshot", {});
+        return;
+      }
+      if (o.userData.target) { W.hitTarget(o.userData.target); return; }
+      while (o && !(o.userData && o.userData.prop)) o = o.parent;
+      const prop = o && o.userData.prop;
+      if (prop) {
+        if (prop.body.mass) { prop.body.wakeUp(); prop.body.applyImpulse(new CANNON.Vec3(dir.x, dir.y, dir.z).scale(3), new CANNON.Vec3(h.point.x, h.point.y, h.point.z)); }
+        if (prop.explosive || prop.breakable || prop.balloon) W.toBreak.push(prop);
+      }
+      W.puff(h.point, 3, "#cfc8bc");
+      W.stars(h.point, 4, "#ffe066");
+    }
+
+    /* =========================================================
+       K.O. GHOST
+       ========================================================= */
+    spawnGhost() {
+      const g = new THREE.Group();
+      const m = new THREE.MeshStandardMaterial({ color: "#ffffff", transparent: true, opacity: 0.75, emissive: "#ffffff", emissiveIntensity: 0.3, roughness: 0.4 });
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 20, 14), m); g.add(head);
+      const tail = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.5, 20, 1, true), m); tail.rotation.x = Math.PI; tail.position.y = -0.3; g.add(tail);
+      const eye = new THREE.MeshBasicMaterial({ color: "#2a2833" });
+      for (const s of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), eye); e.position.set(s * 0.09, 0.03, 0.25); g.add(e); }
+      const halo = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.025, 8, 24), new THREE.MeshBasicMaterial({ color: "#ffd43b" })); halo.rotation.x = Math.PI / 2; halo.position.y = 0.36; g.add(halo);
+      g.position.copy(this.buddy.com).add(new V3(0, 0.4, 0));
+      this.world.fxGroup.add(g);
+      this.ghosts.push({ g, m, t: 0 });
+      S.audio.play("tweet");
+    }
+
+    /* =========================================================
+       PER FRAME
+       ========================================================= */
+    update(dt, rdt) {
+      const W = this.world, B = this.buddy;
+      for (let i = this.timers.length - 1; i >= 0; i--) { const t = this.timers[i]; t.t -= dt; if (t.t <= 0) { this.timers.splice(i, 1); t.fn(); } }
+      const fires = [];
+      this.flameAcc += dt;
+      const spawnN = (rate) => { let n = rate * dt; let k = Math.floor(n); if (Math.random() < n - k) k++; return k; };
+
+      for (const pd of this.puddles) {
+        if (pd.burning <= 0) continue;
+        pd.burning -= dt;
+        for (let i = 0, n = spawnN(30 + pd.r * 60); i < n; i++) {
+          const a = R(0, 6.28), rr = Math.sqrt(Math.random()) * pd.r;
+          this.flame.spawn({ pos: new V3(pd.x + Math.cos(a) * rr, 0.03, pd.z + Math.sin(a) * rr), vel: new V3(R(-0.2, 0.2), R(1, 2.4), R(-0.2, 0.2)), size: R(0.05, 0.12) * (0.7 + pd.r * 0.6), life: R(0.35, 0.75), color: pick(FLAME), gravity: -1.2, floor: false });
+        }
+        if (Math.random() < dt * 3) W.fx.dust.spawn({ pos: new V3(pd.x, 0.6, pd.z), vel: new V3(R(-0.2, 0.2), R(0.6, 1.2), R(-0.2, 0.2)), size: R(0.12, 0.2), life: 1.4, color: "#3d3d3d", gravity: -0.3, drag: 1, grow: 2.5, floor: false });
+        fires.push({ x: pd.x, z: pd.z, y: 0, r: pd.r });
+        for (const q of this.puddles) if (!q.burning && q.amount > 0 && Math.hypot(q.x - pd.x, q.z - pd.z) < q.r + pd.r + 0.15) q.burning = 3 + q.amount * 4;
+        if (B.burn <= 0 && B.com.y < 1.4 && Math.hypot(B.com.x - pd.x, B.com.z - pd.z) < pd.r + 0.25) this.burnBuddy();
+        if (pd.burning <= 0) { pd.amount = 0; pd.mesh.material = this.scorchMat; }
+      }
+      for (let i = this.spots.length - 1; i >= 0; i--) {
+        const sp = this.spots[i];
+        sp.t -= dt;
+        for (let k = 0, n = spawnN(25); k < n; k++) this.flame.spawn({ pos: new V3(sp.x + R(-0.12, 0.12), sp.y, sp.z + R(-0.12, 0.12)), vel: new V3(R(-0.2, 0.2), R(1, 2), R(-0.2, 0.2)), size: R(0.05, 0.1), life: R(0.3, 0.6), color: pick(FLAME), gravity: -1, floor: false });
+        fires.push({ x: sp.x, z: sp.z, y: sp.y, r: 0.25 });
+        if (sp.t <= 0) this.spots.splice(i, 1);
+      }
+
+      // the buddy on fire
+      if (B.burn > 0) {
+        B.burn -= dt;
+        const inv = B.quat;
+        for (let i = 0, n = spawnN(55); i < n; i++) {
+          const local = new V3(R(-0.28, 0.28), R(-0.95, 1.15), R(-0.22, 0.22)).applyQuaternion(inv);
+          this.flame.spawn({ pos: B.com.clone().add(local), vel: new V3(R(-0.3, 0.3), R(1.2, 2.6), R(-0.3, 0.3)), size: R(0.06, 0.15), life: R(0.3, 0.65), color: pick(FLAME), gravity: -1.5, floor: false });
+        }
+        if (Math.random() < dt * 6) W.fx.dust.spawn({ pos: B.com.clone().add(new V3(0, 1.1, 0)), vel: new V3(R(-0.2, 0.2), R(0.8, 1.4), R(-0.2, 0.2)), size: R(0.12, 0.2), life: 1.3, color: "#2f2f2f", gravity: -0.3, drag: 1, grow: 2.5, floor: false });
+        B.damage(7 * dt, "fire");
+        this.sootT -= dt;
+        if (this.sootT <= 0) { this.sootT = 0.9; B.face.splat(R(0.3, 0.7), R(0.3, 0.7), "soot", null, R(0.3, 0.5)); }
+        this.lineT -= dt;
+        if (this.lineT <= 0 && !B.dead) { this.lineT = R(1.6, 2.6); B.react("scared", 1.5, pick(BURN_LINES)); }
+        fires.push({ x: B.com.x, z: B.com.z, y: B.com.y, r: 0.5 });
+        for (const pd of this.puddles) if (!pd.burning && pd.amount > 0 && B.com.y < 1.4 && Math.hypot(B.com.x - pd.x, B.com.z - pd.z) < pd.r + 0.3) pd.burning = 3 + pd.amount * 4;
+        if (B.burn <= 0) { B.burn = 0; W.puff(B.com.clone().add(new V3(0, 0.8, 0)), 6, "#555"); }
+      }
+
+      // gas cylinders heat up near fire, then go boom
+      for (const p of W.props) {
+        if (!p.explosive || p.broken) continue;
+        const pos = p.mesh.position;
+        const near = fires.some((f) => Math.hypot(f.x - pos.x, f.z - pos.z) < f.r + 0.5 && Math.abs(f.y - pos.y) < 1.4);
+        if (near) p.heat = (p.heat || 0) + dt;
+        if (p.heat > 0) {
+          if (Math.random() < dt * 8) this.flame.spawn({ pos: pos.clone().add(new V3(0, 0.55, 0)), vel: new V3(R(-0.5, 0.5), R(1, 2), R(-0.5, 0.5)), size: 0.05, life: 0.4, color: "#ffd166", gravity: -1, floor: false });
+          if (!p.hissing && p.heat > 0.3) { p.hissing = true; S.audio.play("hiss"); }
+          if (p.heat > 1.5) W.toBreak.push(p);
+        }
+      }
+
+      // firelight + crackle
+      const main = B.burn > 0 ? { x: B.com.x, y: B.com.y + 0.6, z: B.com.z } : fires[0] ? { x: fires[0].x, y: fires[0].y + 0.6, z: fires[0].z } : null;
+      if (main) { this.fireLight.position.set(main.x, main.y, main.z); this.fireLight.intensity = 6 + Math.random() * 4 + Math.min(10, fires.length * 1.5); }
+      else this.fireLight.intensity = 0;
+      S.audio.fireLevel(Math.min(1, fires.length * 0.3));
+
+      // tracers, gun, ghosts
+      for (let i = this.tracers.length - 1; i >= 0; i--) { const t = this.tracers[i]; t.t -= rdt; t.line.material.opacity = Math.max(0, t.t / 0.08); if (t.t <= 0) { W.fxGroup.remove(t.line); t.line.geometry.dispose(); t.line.material.dispose(); this.tracers.splice(i, 1); } }
+      if (this.gun.visible) {
+        const ray = W.rayFrom(new THREE.Vector2(B.pointer.x, B.pointer.y));
+        this.gun.lookAt(ray.ray.at(8, new V3()));
+        this.recoil = Math.max(0, this.recoil - rdt * 8);
+        this.gun.rotateX(-this.recoil * 0.35);
+        this.gun.position.z = -0.55 + this.recoil * 0.06;
+      }
+      this.flash.intensity = Math.max(0, this.flash.intensity - rdt * 60);
+      this.flashMesh.material.opacity = Math.max(0, this.flashMesh.material.opacity - rdt * 14);
+      for (let i = this.ghosts.length - 1; i >= 0; i--) {
+        const gh = this.ghosts[i];
+        gh.t += rdt;
+        gh.g.position.y += rdt * 0.7;
+        gh.g.position.x += Math.sin(gh.t * 3) * rdt * 0.3;
+        gh.m.opacity = Math.max(0, 0.75 - Math.max(0, gh.t - 2) * 0.5);
+        if (gh.t > 3.6) { W.fxGroup.remove(gh.g); this.ghosts.splice(i, 1); }
+      }
+    }
+
+    clear() {
+      for (const pd of this.puddles) this.world.fxGroup.remove(pd.mesh);
+      this.puddles = []; this.spots = []; this.timers = [];
+      for (const g of this.ghosts) this.world.fxGroup.remove(g.g);
+      this.ghosts = [];
+      this.buddy.burn = 0; this.buddy.soak = 0;
+      this.fireLight.intensity = 0;
+      S.audio.fireLevel(0);
+    }
+  }
+  S.Brutal = Brutal;
+})();

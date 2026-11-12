@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>No Stress Here</title>
+  <meta name="description" content="Silly little stress relief games. Poke things. Feel better. Probably." />
+  <script src="assets/js/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/css/base.css" />
+  <link rel="stylesheet" href="assets/css/home.css" />
+</head>
+<body>
+  <div class="bg-blobs" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+
+  <header class="site-header">
+    <a class="logo" href="index.html"><span class="logo-mark" aria-hidden="true"></span>No Stress <span class="here">Here</span></a>
+    <div class="header-actions">
+      <button class="pill-btn" type="button" data-theme-toggle aria-pressed="false">
+        <span class="theme-icon" aria-hidden="true"></span><span class="theme-label">Dark</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <div class="hero-text">
+        <p class="eyebrow">⚠️ Warning: this zone is 100% deadline-free</p>
+        <h1 class="wobble-title" aria-label="No Stress Here.">
+          <span>N</span><span>o</span>&nbsp;<span>S</span><span>t</span><span>r</span><span>e</span><span>s</span><span>s</span><br />
+          <span class="accent">H</span><span class="accent">e</span><span class="accent">r</span><span class="accent">e</span><span class="accent">.</span>
+        </h1>
+        <p class="lead">
+          A tiny corner of the internet where your boss, your inbox and that one group chat
+          can't find you. Pick a game, poke things, feel <strong>at least 3% better</strong>.
+        </p>
+        <p class="fine-print">*Results not guaranteed. But probably.</p>
+        <div class="hero-cta">
+          <a class="big-btn" href="games/pop-it/index.html">Start popping 🫧</a>
+          <a class="big-btn secondary-cta" href="games/brick-breaker/index.html">Smash bricks 🧱</a>
+          <span class="forecast" id="forecast">Today's forecast: 100% chance of chill</span>
+        </div>
+      </div>
+
+      <div class="mascot-wrap">
+        <div class="speech" id="speech" role="status" aria-live="polite">Hi! I'm Blobby. Poke me.</div>
+        <button class="mascot" id="mascot" type="button" aria-label="Poke Blobby the mascot">
+          <svg viewBox="0 0 200 200" aria-hidden="true">
+            <defs>
+              <radialGradient id="blobFill" cx="38%" cy="32%" r="75%">
+                <stop offset="0%" stop-color="#ffd3e6" />
+                <stop offset="55%" stop-color="#ff8fbb" />
+                <stop offset="100%" stop-color="#ef5f98" />
+              </radialGradient>
+            </defs>
+            <path class="blob-body" fill="url(#blobFill)"
+              d="M100 18c40 0 74 26 78 66 4 38-14 82-52 94-30 9-70 4-90-22-20-26-20-66 0-96 14-24 34-42 64-42z" />
+            <ellipse cx="66" cy="62" rx="16" ry="10" fill="#fff" opacity=".55" />
+            <g class="eyes">
+              <ellipse cx="78" cy="98" rx="9" ry="12" fill="#2a2833" />
+              <ellipse cx="128" cy="98" rx="9" ry="12" fill="#2a2833" />
+              <circle cx="81" cy="94" r="3" fill="#fff" />
+              <circle cx="131" cy="94" r="3" fill="#fff" />
+            </g>
+            <ellipse cx="62" cy="122" rx="12" ry="7" fill="#ff5d8f" opacity=".5" />
+            <ellipse cx="144" cy="122" rx="12" ry="7" fill="#ff5d8f" opacity=".5" />
+            <path class="mouth" d="M88 124 q15 16 30 0" stroke="#2a2833" stroke-width="5" fill="none" stroke-linecap="round" />
+          </svg>
+        </button>
+        <p class="poke-count" id="pokeCount">Blobby has been poked 0 times.</p>
+      </div>
+    </section>
+
+    <section class="games" aria-labelledby="games-title">
+      <div class="section-head">
+        <h2 id="games-title">Pick your poison <span class="muted">(it's non-toxic)</span></h2>
+        <p class="muted">Games for when you need to do something with your hands that isn't typing angry emails.</p>
+      </div>
+
+      <div class="game-grid">
+        <article class="game-card">
+          <div class="card-preview popit-preview" id="miniPopit" aria-label="Mini pop it you can poke"></div>
+          <div class="card-body">
+            <div class="tags"><span>Satisfying</span><span>Infinite</span><span>Zero calories</span></div>
+            <h3>Pop It!</h3>
+            <p>The silicone fidget toy, minus the silicone. Push the bubbles, flip it over, push them again. Forever. Nobody can stop you.</p>
+            <a class="big-btn small" href="games/pop-it/index.html">Play Pop It →</a>
+          </div>
+        </article>
+
+        <article class="game-card">
+          <div class="card-preview bb-preview" aria-hidden="true">
+            <div class="bb-mini">
+              <div class="bb-bricks"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+              <span class="bb-ball"></span>
+              <span class="bb-paddle"></span>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="tags"><span>Smashy</span><span>Power-ups</span><span>Boss fights</span></div>
+            <h3>Brick Breaker</h3>
+            <p>Smash your problems. They're bricks now. Fireballs, lasers, multi-ball, and a boss called Monday Morning.</p>
+            <a class="big-btn small" href="games/brick-breaker/index.html">Play Brick Breaker →</a>
+          </div>
+        </article>
+
+        <article class="game-card">
+          <div class="card-preview smash-preview" aria-hidden="true">
+            <div class="sm-buddy"><span class="sm-face">😵</span><span class="sm-pie">🥧</span><span class="sm-pow">POW!</span></div>
+          </div>
+          <div class="card-body">
+            <div class="tags"><span>3D</span><span>Your own face</span><span>18 objects</span></div>
+            <h3>Smash It</h3>
+            <p>A squishy 3D buddy. Put any face on it, then pie it, bonk it, hose it down and toss it into the cushions.</p>
+            <a class="big-btn small" href="games/smash-it/index.html">Play Smash It →</a>
+          </div>
+        </article>
+
+        <article class="game-card">
+          <div class="card-preview draw-preview" aria-hidden="true">
+            <svg viewBox="0 0 120 120" class="dp-flower"><ellipse cx="98.0" cy="60.0" rx="20" ry="12" transform="rotate(0 98.0 60.0)" style="--d:0.0s"/><ellipse cx="86.9" cy="86.9" rx="20" ry="12" transform="rotate(45 86.9 86.9)" style="--d:0.25s"/><ellipse cx="60.0" cy="98.0" rx="20" ry="12" transform="rotate(90 60.0 98.0)" style="--d:0.5s"/><ellipse cx="33.1" cy="86.9" rx="20" ry="12" transform="rotate(135 33.1 86.9)" style="--d:0.75s"/><ellipse cx="22.0" cy="60.0" rx="20" ry="12" transform="rotate(180 22.0 60.0)" style="--d:1.0s"/><ellipse cx="33.1" cy="33.1" rx="20" ry="12" transform="rotate(225 33.1 33.1)" style="--d:1.25s"/><ellipse cx="60.0" cy="22.0" rx="20" ry="12" transform="rotate(270 60.0 22.0)" style="--d:1.5s"/><ellipse cx="86.9" cy="33.1" rx="20" ry="12" transform="rotate(315 86.9 33.1)" style="--d:1.75s"/><circle cx="60" cy="60" r="18" class="mid"/></svg>
+            <span class="dp-crayon">🖍️</span>
+          </div>
+          <div class="card-body">
+            <div class="tags"><span>Relaxing</span><span>60 pages</span><span>6 worlds</span></div>
+            <h3>Draw &amp; Play</h3>
+            <p>A colouring book that's secretly a game. Colour pages, earn stars, unlock glitter, neon and rainbow brushes.</p>
+            <a class="big-btn small" href="games/draw-and-play/index.html">Start colouring →</a>
+          </div>
+        </article>
+
+        <article class="game-card coming-soon">
+          <div class="card-preview soon-preview" aria-hidden="true"><span class="turtle">🐢</span></div>
+          <div class="card-body">
+            <div class="tags"><span>Loading…</span><span>Slowly</span></div>
+            <h3>More games coming</h3>
+            <p>They're on their way. Very slowly. Because we're relaxed and nobody rushes anybody around here.</p>
+            <span class="big-btn small ghost" aria-disabled="true">Soon™</span>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    No stress was harmed in the making of this website. 💗
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="assets/js/home.js"></script>
+</body>
+</html>
