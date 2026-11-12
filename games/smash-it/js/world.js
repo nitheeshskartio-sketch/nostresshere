@@ -365,6 +365,28 @@
       this.floorSplats.push(m);
       if (this.floorSplats.length > 45) { const o = this.floorSplats.shift(); this.fxGroup.remove(o); o.material.dispose(); }
     }
+    // a blood splat on any surface (floor or wall), facing out of it
+    surfaceSplat(point, normal, color, size) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ map: pick(S.splatTex), color, transparent: true, depthWrite: false, roughness: 0.3, polygonOffset: true, polygonOffsetFactor: -2 }));
+      m.quaternion.setFromUnitVectors(new V3(0, 0, 1), normal.clone().normalize());
+      m.rotateZ(R(0, 6.28));
+      const s = (size || 0.4) * R(0.8, 1.3);
+      m.scale.set(s, s, s);
+      m.position.copy(point).addScaledVector(normal, 0.005 + this.floorSplats.length * 0.0003);
+      this.fxGroup.add(m);
+      this.floorSplats.push(m);
+      if (this.floorSplats.length > 80) { const o = this.floorSplats.shift(); this.fxGroup.remove(o); o.material.dispose(); }
+    }
+    // throw blood in random directions; wherever it reaches a wall or floor, it stains it
+    bloodSpray(origin, n, range, color) {
+      const rc = this.splatRay || (this.splatRay = new THREE.Raycaster());
+      for (let i = 0; i < n; i++) {
+        const dir = new V3(R(-1, 1), R(-0.6, 0.8), R(-1, 1)).normalize();
+        rc.set(origin, dir); rc.far = range || 3;
+        const h = rc.intersectObjects(this.solids, false)[0];
+        if (h) this.surfaceSplat(h.point, h.face.normal.clone().transformDirection(h.object.matrixWorld), color || pick(["#9b0000", "#7a0010", "#b3001b"]), R(0.25, 0.6));
+      }
+    }
     clearFloor() { for (const m of this.floorSplats) { this.fxGroup.remove(m); m.material.dispose(); } this.floorSplats = []; }
 
     shake(a) { this.shakeAmt = Math.max(this.shakeAmt, a); }

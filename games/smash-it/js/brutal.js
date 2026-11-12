@@ -77,6 +77,7 @@
 
     burnBuddy() {
       const B = this.buddy;
+      if (B.gibbed) return;
       const dur = 4 + B.soak * 9;
       if (B.burn <= 0) B.react("scared", 1.5, pick(BURN_LINES));
       B.burn = Math.max(B.burn, dur);
@@ -268,7 +269,7 @@
         if (part === "arm" || part === "leg") {
           const lp = h.point.clone().sub(B.com).applyQuaternion(B.invQuat());
           B.hurtLimb(part + (lp.x > 0 ? "L" : "R"), (chain ? 55 : 40) * dt, dir, 10);
-        }
+        } else B.hurtCore(part, (chain ? 55 : 40) * dt, dir, false);
         B.nudge(dir, 0.12, part);
         if (this.sawFx <= 0) {
           this.sawFx = 0.06;
@@ -279,6 +280,8 @@
           this.sawHit = 0.35;
           if (o !== B.faceMesh) { B.addDecal(o, h.point, dir.clone().negate(), "#ffffff", 0.2, S.gashTex); B.addBleed(o, h.point, 2); }
           else B.face.injure(9);
+          if (part === "torso" || part === "head") B.hurtCore(part, 0, dir, true);
+          W.bloodSpray(h.point, 2, 2);
           S.bus.emit("hit", { tool: this.sawKind, part, power: 6, flying: B.state === "fly" });
         }
         if (this.sawLine <= 0) { this.sawLine = R(1.4, 2.2); B.react("scared", 1.4, pick(chain ? ["AAAAH!", "A CHAINSAW?!", "Where did you even GET that?!", "This is not stress relief!", "I'm too young for this!"] : ["AAAAH!", "NOT THE SAW!", "That's a SAW!", "Put it down! PUT IT DOWN!", "I'm too young for this!"])); }
@@ -315,7 +318,7 @@
       let o = h.object;
       if (o.userData.part) {
         const head = o.userData.part === "head";
-        B.applyHit({ dir, power: head ? 6 : 4, point: h.point, part: o.userData.part, tool: { id: "gun", react: head ? ["ko", 1.2, "brutal"] : null }, dmg: head ? 25 : 12 });
+        B.applyHit({ dir, power: head ? 6 : 4, point: h.point, part: o.userData.part, tool: { id: "gun", react: head ? ["ko", 1.2, "brutal"] : null }, dmg: head ? 25 : 12, cut: true });
         this.tools.gore(h.point, dir, o.userData.part, o, head ? 9 : 6);
         if (B.burn <= 0 && B.soak > 0.3 && Math.random() < 0.3) this.burnBuddy();
         S.bus.emit("hit", { tool: "gun", part: o.userData.part, power: head ? 9 : 6, flying: B.state === "fly" });

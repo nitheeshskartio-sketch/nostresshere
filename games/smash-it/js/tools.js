@@ -405,7 +405,7 @@
       }
       const brutal = tool.set === "brutal";
       const limbHit = hit.part === "arm" || hit.part === "leg";
-      const p = B.applyHit({ dir: fdir, power: tool.power, point, part: hit.part, tool: brutal ? { react: tool.id === "pan" ? ["dizzy", 2, "brutal"] : Math.random() < 0.5 ? ["ko", 1.2, "brutal"] : null } : tool, slap: tool.id === "slap" || tool.id === "pan", lift, dmg: tool.cut && limbHit ? tool.power * 2.6 : undefined });
+      const p = B.applyHit({ dir: fdir, power: tool.power, point, part: hit.part, tool: brutal ? { react: tool.id === "pan" ? ["dizzy", 2, "brutal"] : Math.random() < 0.5 ? ["ko", 1.2, "brutal"] : null } : tool, slap: tool.id === "slap" || tool.id === "pan", lift, dmg: tool.cut && limbHit ? tool.power * 2.6 : undefined, cut: !!tool.cut });
       if (tool.id === "pan" && hit.part === "head") B.dizzy = 2.5;
       if (brutal) this.gore(point, fdir, hit.part, hit.object, p);
       if (tool.cut && hit.object && hit.object !== B.faceMesh) {
@@ -706,6 +706,7 @@
         if (power >= 8) B.addDecal(object, point, dir.clone().negate(), "#ffffff", 0.14 + power * 0.008, S.gashTex);
       }
       if (part === "head") B.face.injure(power);
+      if (power >= 7) W.bloodSpray(point, Math.round(power / 3), 2.6);
       if (power > 7 || Math.random() < 0.4) W.floorSplat(new V3(B.com.x + R(-0.45, 0.45), 0, B.com.z + R(-0.3, 0.45)), "#7a0010", 0.35 + power * 0.05);
       if (power > 9) { W.slowmo(0.45); W.shake(power * 0.6); }
     }

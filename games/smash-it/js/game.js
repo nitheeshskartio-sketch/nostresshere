@@ -58,9 +58,11 @@
   /* =========================================================
      TOOLS TRAY + UNLOCKS
      ========================================================= */
-  const unlocked = (t) => S.toolSet(t) === "brutal" || (S.toolSet(t) === "both" && prefs.violence === "brutal") || prefs.unlockAll || prefs.totalHits >= t.unlock;
+  // Brutal mode gets every object, all unlocked. Normal mode (where photo faces work) keeps the gentle ones.
+  const unlocked = (t) => prefs.violence === "brutal" || S.toolSet(t) === "brutal" || prefs.unlockAll || prefs.totalHits >= t.unlock;
   // Normal mode and Brutal mode each have their own objects (sponge & water work in both)
-  const inMode = (t) => { const s = S.toolSet(t); return s === "both" || s === prefs.violence; };
+  const inMode = (t) => { const s = S.toolSet(t); return prefs.violence === "brutal" || s === "both" || s === "normal"; };
+  S.bus.on("gibbed", () => toast("💥 Total wipeout! Tap 🩹 Patch up to put them back together.", 3500));
   const visibleTools = () => S.TOOLS.filter(inMode);
   let current = S.toolById(prefs.violence === "brutal" ? prefs.toolBrutal : prefs.tool) || visibleTools()[0];
   if (!unlocked(current) || !inMode(current)) current = visibleTools()[0];

@@ -170,6 +170,7 @@
       // spine + torso
       const spineG = new THREE.Group(); spineG.position.y = 0.05; body.add(spineG);
       const torso = this.mesh(cap(0.23, 0.3), shirt, "torso", spineG, [0, 0.3, 0]);
+      this.spineG = spineG; this.torsoMesh = torso;
       torso.scale.set(1.15, 1, 0.8);
       this.mesh(new THREE.CylinderGeometry(0.075, 0.085, 0.14, 12), skin, "head", spineG, [0, 0.6, 0]);
 
@@ -177,6 +178,7 @@
       const headG = new THREE.Group(); headG.position.y = 0.64; spineG.add(headG);
       const headIn = (this.headIn = new THREE.Group()); headIn.position.y = 0.27; headG.add(headIn);
       const head = this.mesh(new THREE.SphereGeometry(0.28, 36, 24), skin, "head", headIn);
+      this.headMesh = head; this.headG = headG;
       head.scale.y = 1.04;
       const faceGeo = new THREE.SphereGeometry(0.2818, 48, 32, Math.PI / 2 - 1.0, 2.0, 0.5, 1.85);
       const face = new THREE.Mesh(faceGeo, this.faceMat.cur);
@@ -187,7 +189,9 @@
       for (const s of [-1, 1]) { const ear = this.mesh(new THREE.SphereGeometry(0.06, 12, 10), skin, "head", headIn, [s * 0.275, 0.0, -0.01]); ear.scale.set(0.5, 1, 0.8); }
       this.nose = this.mesh(new THREE.SphereGeometry(0.042, 14, 10), skin, "head", headIn, [0, 0.0, 0.285]);
       this.nose.visible = !this.face.hasPhoto;
+      const nHair = this.hitMeshes.length;
       this.buildHair(headIn, hairM, O);
+      this.hairMeshes = this.hitMeshes.slice(nHair);
       if (O.acc === "nose") {
         const red = this.mat("#e03131", { roughness: 0.3 });
         this.clownNose = this.mesh(new THREE.SphereGeometry(0.065, 16, 12), red, "head", headIn, [0, 0.0, 0.3]);
@@ -237,6 +241,8 @@
         L.g.traverse((o) => { if (o.isMesh && o.userData.part) L.meshes.push(o); });
       }
       this.lost = new Set(); this.lostJoints = new Set(); this.bleeds = [];
+      this.torsoHp = 60; this.headHp = 45; this.chestOpen = false; this.skullOpen = false; this.organs = []; this.brain = null; this.heart = null;
+      this.gibbed = false; this.root.visible = true;
 
       // joints
       const J = (this.j = {
@@ -390,13 +396,13 @@
     setState(s) { this.state = s; this.stateT = 0; }
 
     say(kind, force) {
-      if (this.dead) return;
+      if (this.dead || this.gibbed) return;
       const line = typeof kind === "string" && LINES[kind] ? pick(LINES[kind]) : kind;
       S.bus.emit("say", line);
       if (force || Math.random() < 0.7) S.audio.speak(line, force);
     }
     react(expr, dur, lineKind, emote) {
-      if (this.dead) return;
+      if (this.dead || this.gibbed) return;
       this.face.setExpression(expr, dur || 1.3);
       if (lineKind) this.say(lineKind);
       if (emote) this.emote = { name: emote, t: dur || 1.5 };
@@ -471,6 +477,7 @@
         const dmg = o.dmg != null ? o.dmg : p;
         if (o.part === "arm" || o.part === "leg") this.hurtLimb(o.part + (lp.x > 0 ? "L" : "R"), dmg, d, p);
         else if (p >= 11 && Math.random() < 0.35) this.hurtLimb(pick(Object.keys(this.limbs)), dmg, d, p);
+        if (o.part === "torso" || o.part === "head") this.hurtCore(o.part, dmg, d, !!o.cut || p >= 7);
       }
       return p;
     }
@@ -485,7 +492,148 @@
       L.hp -= dmg;
       if (L.hp <= 0) this.sever(key, dir || new V3(0, 0, -1), p || 10);
     }
+    /* ---------- organs (Brutal mode) ---------- */
+    hurtCore(part, dmg, dir, rip) {
+      if (!this.brutal || this.gibbed) return;
+      if (part === "torso") {
+        if (!this.chestOpen) { this.torsoHp -= dmg; if (this.torsoHp <= 0) this.openChest(dir); }
+        else if (rip) this.extractOrgan(dir);
+      } else if (part === "head") {
+        if (!this.skullOpen) { this.headHp -= dmg; if (this.headHp <= 0) this.openSkull(dir); }
+        else if (rip && this.brain && this.brain.parent === this.headIn) this.popBrain(dir);
+      }
+    }
+    organMat(color) { return this.mat(color, { roughness: 0.3, metalness: 0.05 }).cur; }
+    openChest(dir) {
+      if (this.chestOpen) return;
+      this.chestOpen = true;
+      const g = new THREE.Group(); this.spineG.add(g); this.chestG = g;
+      const add = (geo, color, pos, scl) => { const m = new THREE.Mesh(geo, this.organMat(color)); m.position.set(pos[0], pos[1], pos[2]); if (scl) m.scale.set(scl[0], scl[1], scl[2]); m.castShadow = true; g.add(m); return m; };
+      add(new THREE.SphereGeometry(0.2, 20, 14), "#4a0510", [0, 0.3, 0.165], [1.05, 1.25, 0.3]);
+      // ribs
+      for (let i = 0; i < 4; i++) {
+        const y = 0.36 + i * 0.045;
+        const pts = []; for (let k = 0; k <= 8; k++) { const t = -1.05 + (k / 8) * 2.1; pts.push(new V3(Math.sin(t) * 0.15, y - Math.abs(t) * 0.02, Math.cos(t) * 0.07 + 0.13)); }
+        add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 16, 0.011, 6), "#f1e3c8", [0, 0, 0]);
+      }
+      const lungL = add(new THREE.SphereGeometry(0.075, 16, 12), "#e58f9a", [0.09, 0.42, 0.15], [0.85, 1.25, 0.55]);
+      const lungR = add(new THREE.SphereGeometry(0.075, 16, 12), "#e58f9a", [-0.09, 0.42, 0.15], [0.85, 1.25, 0.55]);
+      const heart = new THREE.Group(); heart.position.set(0.035, 0.38, 0.19); g.add(heart);
+      const red = this.organMat("#b5172b");
+      for (const s of [-1, 1]) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.035, 12, 10), red); b.position.set(s * 0.022, 0.012, 0); heart.add(b); }
+      const tipM = new THREE.Mesh(new THREE.ConeGeometry(0.048, 0.07, 12), red); tipM.rotation.z = Math.PI; tipM.position.y = -0.03; heart.add(tipM);
+      this.heart = heart;
+      const pts = []; for (let r = 0; r < 4; r++) for (let k = 0; k <= 6; k++) { const x = (r % 2 ? 1 - k / 6 : k / 6) * 0.26 - 0.13; pts.push(new V3(x, 0.24 - r * 0.045 + Math.sin(k * 1.7) * 0.01, 0.19 + Math.sin(k + r) * 0.012)); }
+      const guts = add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 90, 0.026, 8), "#e9a3a9", [0, 0, 0]);
+      this.organs = [guts, heart, lungL, lungR];
+      const p = this.torsoMesh.getWorldPosition(new V3());
+      this.world.splash(p, "#9b0000", 40, 4, 0.03); this.world.bloodSpray(p, 10, 3);
+      S.audio.play("crunch", 14); S.audio.play("splat");
+      this.react("scared", 2, pick(["MY INSIDES!", "Those go INSIDE!", "Is that my lunch?!", "Please put that back."]));
+    }
+    extractOrgan(dir) {
+      const o = this.organs.shift();
+      if (!o) return;
+      const pos = o.getWorldPosition(new V3()), q = o.getWorldQuaternion(new Q());
+      const v = (dir || new V3(0, 0, 1)).clone().multiplyScalar(-1).add(new V3(R(-1, 1), R(1.5, 3), R(0.5, 2)));
+      this.makeGib(o, pos, q, v.multiplyScalar(1.6), o === this.organs[0] ? 0.1 : 0.08, 3);
+      this.world.splash(pos, "#9b0000", 20, 3, 0.03);
+      S.audio.play("splat");
+      if (Math.random() < 0.6) this.react("cry", 1.6, pick(["Not my heart!", "I needed that!", "Hey, that's mine!", "Give it back!"]));
+    }
+    openSkull(dir) {
+      if (this.skullOpen) return;
+      this.skullOpen = true;
+      const W = this.world, hi = this.headIn;
+      const cut = 0.78;
+      for (const m of this.hairMeshes) m.visible = false;
+      this.hitMeshes = this.hitMeshes.filter((m) => !this.hairMeshes.includes(m));
+      // open the head shell (keeps the face texture lined up)
+      const hm = this.headMesh;
+      hm.geometry = new THREE.SphereGeometry(0.28, 36, 24, 0, Math.PI * 2, cut, Math.PI - cut);
+      const fg = new THREE.SphereGeometry(0.2818, 48, 32, Math.PI / 2 - 1.0, 2.0, cut, 2.35 - cut);
+      const pa = fg.attributes.position, uv = fg.attributes.uv;
+      for (let i = 0; i < pa.count; i++) uv.setY(i, 1 - (Math.acos(THREE.MathUtils.clamp(pa.getY(i) / 0.2818, -1, 1)) - 0.5) / 1.85);
+      this.faceMesh.geometry = fg;
+      const inside = new THREE.Mesh(new THREE.SphereGeometry(0.262, 24, 16), new THREE.MeshStandardMaterial({ color: "#5a0a10", side: THREE.BackSide, roughness: 0.4 })); hi.add(inside);
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.28 * Math.sin(cut), 0.016, 8, 32), this.organMat("#8a1520")); rim.rotation.x = Math.PI / 2; rim.position.y = 0.28 * Math.cos(cut) * 1.04; hi.add(rim);
+      const bg = new THREE.IcosahedronGeometry(0.2, 3), bp = bg.attributes.position;
+      for (let i = 0; i < bp.count; i++) { const v = new V3().fromBufferAttribute(bp, i); v.multiplyScalar(1 + Math.sin(v.x * 60) * Math.cos(v.z * 55) * 0.05 + Math.sin(v.y * 70) * 0.03); bp.setXYZ(i, v.x, v.y, v.z); }
+      bg.computeVertexNormals();
+      const brain = new THREE.Mesh(bg, this.organMat("#f4a3b6")); brain.scale.set(1.05, 0.75, 1.15); brain.position.y = 0.12; brain.castShadow = true;
+      hi.add(brain); this.brain = brain;
+      // the top of the skull flies off
+      const capG = new THREE.Group();
+      const capM = new THREE.Mesh(new THREE.SphereGeometry(0.282, 24, 10, 0, Math.PI * 2, 0, cut), this.mat(this.look.hair === "bald" ? this.look.skin : this.look.hairColor, { side: THREE.DoubleSide }).cur);
+      capG.add(capM);
+      const pos = hi.getWorldPosition(new V3()).add(new V3(0, 0.2, 0));
+      this.makeGib(capG, pos, hi.getWorldQuaternion(new Q()), new V3(R(-1.5, 1.5), 4.5, R(-1, 1)).add((dir || new V3()).clone().multiplyScalar(2)), 0.14, 2);
+      W.splash(pos, "#9b0000", 30, 3.5, 0.03); W.bloodSpray(pos, 8, 3);
+      S.audio.play("crunch", 14);
+      this.react("dizzy", 2.5, pick(["My head feels… drafty.", "Is my brain showing?", "Ow! My thinking!"]));
+    }
+    popBrain(dir) {
+      const b = this.brain;
+      const pos = b.getWorldPosition(new V3()), q = b.getWorldQuaternion(new Q());
+      this.makeGib(b, pos, q, new V3(R(-1, 1), 4, R(-1, 1)).add((dir || new V3()).clone().multiplyScalar(-1.5)), 0.15, 3);
+      this.brain = null;
+      this.world.splash(pos, "#9b0000", 25, 3, 0.03);
+      S.audio.play("splat");
+      this.react("ko", 3, pick(["Duhhh…", "Who am I?", "Brain… gone…"]));
+    }
+    // loose body pieces: physics objects that bleed and stain walls where they land
+    makeGib(obj, pos, quat, vel, r, bleed) {
+      const W = this.world;
+      if (obj.parent) obj.parent.remove(obj);
+      obj.position.set(0, 0, 0);
+      const prop = W.addProp({ kind: "gib", mesh: obj, shape: new CANNON.Sphere(r), mass: Math.max(0.25, r * 5), pos: [pos.x, pos.y, pos.z], damp: 0.3, adamp: 0.4, color: "#8a0e0e" });
+      if (quat) { prop.body.quaternion.set(quat.x, quat.y, quat.z, quat.w); obj.quaternion.copy(quat); }
+      prop.body.velocity.set(vel.x, vel.y, vel.z);
+      prop.body.angularVelocity.set(R(-9, 9), R(-9, 9), R(-9, 9));
+      prop.body.addEventListener("collide", (e) => {
+        const imp = Math.abs(e.contact.getImpactVelocityAlongNormal()), now = performance.now();
+        if (imp > 2.2 && (!prop.lastSplat || now - prop.lastSplat > 250)) { prop.lastSplat = now; W.bloodSpray(new V3(prop.body.position.x, prop.body.position.y, prop.body.position.z), 2, 0.7); }
+      });
+      this.bleeds.push({ obj, t: bleed || 2.5, acc: 0 });
+      const gibs = W.props.filter((x) => x.kind === "gib");
+      if (gibs.length > 50) { const old = gibs[0]; W.propGroup.remove(old.mesh); W.physics.removeBody(old.body); W.props = W.props.filter((x) => x !== old); }
+      return prop;
+    }
+    // a close explosion: the whole body comes apart
+    shatter(pos) {
+      if (this.gibbed) return;
+      const W = this.world;
+      const out = (o) => o.getWorldPosition(new V3()).sub(pos).normalize();
+      for (const k in this.limbs) if (!this.lost.has(k)) this.sever(k, out(this.limbs[k].g), 18);
+      if (!this.chestOpen) this.openChest(new V3(0, 0, 1));
+      while (this.organs.length) this.extractOrgan(out(this.torsoMesh).multiplyScalar(-3));
+      if (!this.skullOpen) this.openSkull(out(this.headIn));
+      if (this.brain) this.popBrain(out(this.headIn).multiplyScalar(-2));
+      // head and torso chunks
+      const hp = this.headG.getWorldPosition(new V3()), hq = this.headG.getWorldQuaternion(new Q());
+      this.makeGib(this.headG, hp, hq, out(this.headG).multiplyScalar(7).add(new V3(0, 4, 0)), 0.28, 3);
+      const cols = [S.OUTFITS[this.look.outfit].shirt, S.OUTFITS[this.look.outfit].pants, "#8a1520", "#6a0d18", this.look.skin];
+      const c = this.com.clone();
+      for (let i = 0; i < 9; i++) {
+        const s = R(0.06, 0.13);
+        const m = new THREE.Mesh(i % 3 ? new THREE.BoxGeometry(s * 1.4, s, s * 1.2) : new THREE.SphereGeometry(s, 10, 8), this.organMat(pick(cols)));
+        m.castShadow = true;
+        const p = c.clone().add(new V3(R(-0.2, 0.2), R(-0.3, 0.4), R(-0.15, 0.15)));
+        this.makeGib(m, p, null, p.clone().sub(pos).normalize().multiplyScalar(R(5, 9)).add(new V3(0, R(2, 4), 0)), s, 2.5);
+      }
+      this.bodyG.visible = false;
+      this.gibbed = true; this.burn = 0; this.soak = 0;
+      this.hitMeshes = [];
+      W.bloodSpray(c, 45, 5); W.bloodSpray(c, 15, 2);
+      for (let i = 0; i < 6; i++) W.floorSplat(new V3(c.x + R(-1.5, 1.5), 0, c.z + R(-1.2, 1.2)), "#7a0010", R(0.5, 1.2));
+      W.splash(c, "#9b0000", 120, 7, 0.035);
+      W.shake(20); W.slowmo(1.1);
+      S.audio.play("splat"); S.audio.play("crunch", 16);
+      S.bus.emit("gibbed", {});
+    }
+
     blast(pos, radius, power) {
+      if (this.brutal && !this.gibbed && this.com.distanceTo(pos) < (power >= 16 ? 1.6 : 1.2)) { this.shatter(pos); return; }
       for (const k in this.limbs) {
         if (this.lost.has(k)) continue;
         const wp = this.limbs[k].g.getWorldPosition(new V3());
@@ -534,8 +682,9 @@
     }
     restore() {
       const W = this.world;
-      for (const pr of W.props.filter((x) => x.kind === "limb")) { W.propGroup.remove(pr.mesh); W.physics.removeBody(pr.body); }
-      W.props = W.props.filter((x) => x.kind !== "limb");
+      const loose = (x) => x.kind === "limb" || x.kind === "gib";
+      for (const pr of W.props.filter(loose)) { W.propGroup.remove(pr.mesh); W.physics.removeBody(pr.body); }
+      W.props = W.props.filter((x) => !loose(x));
       this.build();
     }
     revive() { this.restore(); this.reset(); }
@@ -704,6 +853,12 @@
        UPDATE
        ========================================================= */
     update(dt) {
+      if (this.gibbed) {
+        if (this.bleeds.length) this.updateBleeding(dt);
+        this.body.position.set(0, -50, 0);
+        return;
+      }
+      if (this.heart && this.heart.parent && this.heart.parent === this.chestG) this.heart.scale.setScalar(1 + Math.max(0, Math.sin(performance.now() / 1000 * 8)) * 0.15);
       this.stateT += dt; this.idleT += dt;
       if (this.dizzy > 0) this.dizzy -= dt;
       if (this.emote) { this.emote.t -= dt; if (this.emote.t <= 0) this.emote = null; }
