@@ -168,7 +168,18 @@
   const canvas = world.renderer.domElement;
   const ndc = new THREE.Vector2();
   let down = null, holdTimer = null;
+  // mouse-look (pointer lock) in free-move mode: the crosshair is the centre of the screen
+  const isLocked = () => document.pointerLockElement === canvas;
+  function lockMouse() {
+    try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (err) {}
+  }
+  document.addEventListener("pointerlockchange", () => {
+    const on = isLocked();
+    $("crosshair").hidden = !on;
+    if (on) toast("🖱️ Mouse-look on · move the mouse to turn · click to use your tool · Esc to let go", 3200);
+  });
   function toNdc(e) {
+    if (isLocked()) { ndc.set(0, 0); return ndc; }
     const r = canvas.getBoundingClientRect();
     ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     return ndc;
@@ -192,6 +203,8 @@
 
   canvas.addEventListener("pointerdown", (e) => {
     S.audio.unlock();
+    // free-move with a mouse: the first click captures the mouse for looking around
+    if (world.camMode === "free" && e.pointerType === "mouse" && !isLocked() && e.button === 0) { e.preventDefault(); lockMouse(); return; }
     if (e.button === 1 || e.button === 2) {
       // right/middle drag: always look around
       e.preventDefault();
@@ -233,6 +246,10 @@
   });
 
   canvas.addEventListener("pointermove", (e) => {
+    if (isLocked() && world.camMode === "free") {
+      world.free.yaw -= (e.movementX || 0) * 0.0025;
+      world.free.pitch = THREE.MathUtils.clamp(world.free.pitch - (e.movementY || 0) * 0.0022, -1.2, 0.9);
+    }
     toNdc(e);
     buddy.pointer.x = ndc.x; buddy.pointer.y = ndc.y;
     if (!down || e.pointerId !== down.id) return;
@@ -274,7 +291,7 @@
       if (t && unlocked(t)) selectTool(t);
     } else if (e.key === "r" || e.key === "R") resetAll();
     else if (e.key === "c" || e.key === "C") cycleCam();
-    else if (e.key === "Escape") closePanel();
+    else if (e.key === "Escape") { if (document.pointerLockElement) document.exitPointerLock(); closePanel(); }
   });
 
   /* ---------- free movement: WASD / arrows, Q/E turn, Shift run ---------- */
@@ -284,7 +301,7 @@
     if (world.camMode === "free") return;
     world.enterFree();
     camI = CAMS.findIndex((c) => c[0] === "free");
-    toast("🕹️ Free move: WASD to walk · drag to look · Shift to run · C for follow cam", 3200);
+    toast("🕹️ Free move: WASD to walk · click the game, then move the mouse to look · Shift to run · C for follow cam", 3600);
   }
   document.addEventListener("keydown", (e) => {
     if (e.target.closest && e.target.closest("input, textarea, select")) return;
@@ -355,7 +372,7 @@
   let camI = 0;
   function cycleCam() {
     camI = (camI + 1) % CAMS.length;
-    if (CAMS[camI][0] === "free") world.enterFree(); else world.camMode = CAMS[camI][0];
+    if (CAMS[camI][0] === "free") world.enterFree(); else { world.camMode = CAMS[camI][0]; if (isLocked()) document.exitPointerLock(); }
     world.orbit.az = 0; world.orbit.el = 0.12; toast(CAMS[camI][1]);
   }
   $("camBtn").addEventListener("click", cycleCam);
