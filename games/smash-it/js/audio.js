@@ -118,6 +118,7 @@
     hiss() { noise(0.5, { filter: "highpass", freq: 4000, vol: 0.25, attack: 0.05 }); },
     clank() { tone(420, 0.25, { type: "triangle", vol: 0.25 }); tone(780, 0.2, { vol: 0.12 }); SFX.thud(3); },
     steam() { noise(0.7, { filter: "highpass", freq: 2500, vol: 0.4, attack: 0.02 }); },
+    slice() { noise(0.18, { filter: "highpass", freq: 2500, slide: 7000, vol: 0.5, attack: 0.01 }); tone(1800, 0.12, { type: "triangle", slide: 900, vol: 0.06 }); noise(0.1, { filter: "lowpass", freq: 600, vol: 0.4, delay: 0.05 }); },
     comfy() { noise(0.4, { filter: "lowpass", freq: 500, vol: 0.5, attack: 0.04 }); }
   };
 
@@ -129,6 +130,33 @@
 
   /* ---------- water spray loop ---------- */
   let spray = null;
+  /* ---------- saw motor ---------- */
+  let saw = null;
+  A.sawLevel = function (on, cutting, chain) {
+    if (!ctx) return;
+    if (!A.sfx) on = false;
+    if (on && !saw) {
+      const o = ctx.createOscillator(); o.type = "sawtooth"; o.frequency.value = 170;
+      const o2 = ctx.createOscillator(); o2.type = "square"; o2.frequency.value = 342;
+      const f = ctx.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 1800;
+      const n = ctx.createBufferSource(); n.buffer = noiseBuf; n.loop = true;
+      const nf = ctx.createBiquadFilter(); nf.type = "bandpass"; nf.frequency.value = 2500; nf.Q.value = 0.8;
+      const ng = ctx.createGain(); ng.gain.value = 0;
+      const g = ctx.createGain(); g.gain.value = 0.0001;
+      o.connect(f); o2.connect(f); f.connect(g); n.connect(nf).connect(ng).connect(g);
+      g.connect(sfxBus); o.start(); o2.start(); n.start();
+      saw = { o, o2, g, ng };
+    }
+    if (!saw) return;
+    const t = ctx.currentTime;
+    saw.g.gain.setTargetAtTime(on ? 0.16 : 0.0001, t, 0.05);
+    saw.ng.gain.setTargetAtTime(cutting ? 0.9 : 0.15, t, 0.04);
+    // chainsaw: lower, rough two-stroke engine; disc saw: higher whine
+    const base = chain ? (cutting ? 62 : 88) + Math.random() * 10 : cutting ? 120 : 175;
+    saw.o.frequency.setTargetAtTime(base, t, 0.08);
+    saw.o2.frequency.setTargetAtTime(base * (chain ? 1.5 : 2), t, 0.08);
+  };
+
   A.sprayStart = function () {
     if (!A.sfx || !init() || spray) return;
     const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;

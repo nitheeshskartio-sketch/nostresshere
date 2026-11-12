@@ -172,6 +172,130 @@
     }
     showGun(on) { this.gun.visible = !!on; }
 
+    /* =========================================================
+       SAW CUTTER (hold to cut)
+       ========================================================= */
+    buildSaw() {
+      const g = new THREE.Group();
+      const steel = new THREE.MeshStandardMaterial({ color: "#ced4da", metalness: 0.95, roughness: 0.2 });
+      const disc = new THREE.Group();
+      const blade = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.008, 40), steel); blade.rotation.x = Math.PI / 2; disc.add(blade);
+      for (let i = 0; i < 24; i++) { const a = (i / 24) * Math.PI * 2; const t = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.04, 4), steel); t.position.set(Math.cos(a) * 0.18, Math.sin(a) * 0.18, 0); t.rotation.z = a - Math.PI / 2 + 0.4; disc.add(t); }
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.03, 16), new THREE.MeshStandardMaterial({ color: "#343a40", metalness: 0.6 })); hub.rotation.x = Math.PI / 2; disc.add(hub);
+      g.add(disc);
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.14, 0.12), new THREE.MeshStandardMaterial({ color: "#f59f00", roughness: 0.45 })); body.position.set(0.08, 0.12, -0.08); g.add(body);
+      const guard = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.04, 30, 1, true, 0, Math.PI), new THREE.MeshStandardMaterial({ color: "#e8590c", side: THREE.DoubleSide, roughness: 0.5 })); guard.rotation.x = Math.PI / 2; guard.position.z = -0.03; g.add(guard);
+      const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.22, 10), new THREE.MeshStandardMaterial({ color: "#212529" })); handle.rotation.z = Math.PI / 2; handle.position.set(0.24, 0.16, -0.08); g.add(handle);
+      g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+      g.visible = false;
+      this.world.fxGroup.add(g);
+      g.userData.disc = disc;
+      return g;
+    }
+
+    buildChainsaw() {
+      // the bar points along +Z (toward what you aim at)
+      const g = new THREE.Group();
+      const orange = new THREE.MeshStandardMaterial({ color: "#f76707", roughness: 0.45 });
+      const dark = new THREE.MeshStandardMaterial({ color: "#212529", roughness: 0.5 });
+      const steel = new THREE.MeshStandardMaterial({ color: "#adb5bd", metalness: 0.9, roughness: 0.25 });
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.18, 0.3), orange); body.position.set(0, 0.02, -0.12); g.add(body);
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.05, 0.22), dark); cap.position.set(0, 0.13, -0.12); g.add(cap);
+      const top = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.015, 8, 20, Math.PI), dark); top.position.set(0, 0.14, -0.14); top.rotation.y = Math.PI / 2; g.add(top);
+      const rear = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.16), dark); rear.position.set(0, -0.02, -0.33); g.add(rear);
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.08, 0.5), steel); bar.position.set(0, -0.01, 0.27); g.add(bar);
+      const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.012, 16), steel); tip.rotation.z = Math.PI / 2; tip.position.set(0, -0.01, 0.52); g.add(tip);
+      // chain teeth travel around the bar
+      const teeth = [];
+      for (let i = 0; i < 26; i++) { const t = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.016, 0.022), dark); g.add(t); teeth.push(t); }
+      g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+      g.visible = false;
+      this.world.fxGroup.add(g);
+      g.userData.teeth = teeth; g.userData.chain = 0;
+      return g;
+    }
+
+    showSaw(kind) {
+      this.saws = this.saws || {};
+      for (const k in this.saws) this.saws[k].visible = false;
+      this.sawFx = this.sawFx || 0; this.sawLine = this.sawLine || 0; this.sawHit = this.sawHit || 0;
+      if (!kind) { this.saw = null; S.audio.sawLevel(false, false); return; }
+      if (!this.saws[kind]) this.saws[kind] = kind === "chainsaw" ? this.buildChainsaw() : this.buildSaw();
+      this.saw = this.saws[kind]; this.sawKind = kind;
+      this.saw.visible = true;
+    }
+
+    sawUpdate(dt, ndc, held) {
+      if (!this.saw || !this.saw.visible) return;
+      const W = this.world, B = this.buddy;
+      const ray = W.rayFrom(ndc);
+      const list = B.hitMeshes.concat(W.propGroup.children, W.solids);
+      const h = ray.intersectObjects(list, true)[0];
+      const dir = ray.ray.direction.clone();
+      const target = h && h.distance < 7 ? h.point.clone() : ray.ray.at(2.6, new V3());
+      const chain = this.sawKind === "chainsaw";
+      if (chain) {
+        // bar reaches out to the point you aim at
+        // held from the side so you can see the bar and chain biting in
+        const right = new V3().crossVectors(dir, new V3(0, 1, 0)).normalize();
+        const tip = target.clone().addScaledVector(dir, held && h ? 0.03 : -0.1);
+        const want = tip.clone().addScaledVector(right, 0.3).add(new V3(0, -0.12, 0)).addScaledVector(dir, -0.36);
+        this.saw.position.lerp(want, Math.min(1, dt * 25));
+        this.saw.lookAt(tip);
+        const u = this.saw.userData;
+        u.chain = (u.chain + dt * (held ? 3 : 0.3)) % 1;
+        u.teeth.forEach((t, i) => {
+          let f = (i / u.teeth.length + u.chain) % 1, y, z;
+          if (f < 0.42) { y = 0.035; z = 0.02 + (f / 0.42) * 0.5; } else if (f < 0.5) { const a = ((f - 0.42) / 0.08) * Math.PI; y = Math.cos(a) * 0.035; z = 0.52 + Math.sin(a) * 0.04; }
+          else if (f < 0.92) { y = -0.055; z = 0.52 - ((f - 0.5) / 0.42) * 0.5; } else { const a = ((f - 0.92) / 0.08) * Math.PI; y = -Math.cos(a) * 0.045 - 0.01; z = 0.02 - Math.sin(a) * 0.03; }
+          t.position.set(0, y - 0.01, z);
+        });
+      } else {
+        // hover the blade just in front of whatever you point at
+        this.saw.position.lerp(target.clone().addScaledVector(dir, held && h ? 0.02 : -0.12), Math.min(1, dt * 25));
+        this.saw.lookAt(W.camera.position);
+        this.saw.userData.disc.rotation.z -= dt * (held ? 60 : 4);
+      }
+      const cutting = !!(held && h && h.distance < 7);
+      S.audio.sawLevel(held, cutting, chain);
+      if (!cutting) return;
+      this.saw.position.x += R(-0.01, 0.01); this.saw.position.y += R(-0.01, 0.01);
+      W.shake(0.6);
+      this.sawFx -= dt; this.sawLine -= dt; this.sawHit -= dt;
+      const o = h.object, part = o.userData && o.userData.part;
+      if (part) {
+        // cutting the buddy
+        if (part === "arm" || part === "leg") {
+          const lp = h.point.clone().sub(B.com).applyQuaternion(B.invQuat());
+          B.hurtLimb(part + (lp.x > 0 ? "L" : "R"), (chain ? 55 : 40) * dt, dir, 10);
+        }
+        B.nudge(dir, 0.12, part);
+        if (this.sawFx <= 0) {
+          this.sawFx = 0.06;
+          W.splash(h.point, pick(["#9b0000", "#b3001b", "#7a0010"]), 7, 3.2, 0.024);
+          if (Math.random() < 0.3) W.floorSplat(new V3(h.point.x + R(-0.3, 0.3), 0, h.point.z + R(-0.3, 0.3)), "#7a0010", R(0.2, 0.4));
+        }
+        if (this.sawHit <= 0) {
+          this.sawHit = 0.35;
+          if (o !== B.faceMesh) { B.addDecal(o, h.point, dir.clone().negate(), "#ffffff", 0.2, S.gashTex); B.addBleed(o, h.point, 2); }
+          else B.face.injure(9);
+          S.bus.emit("hit", { tool: this.sawKind, part, power: 6, flying: B.state === "fly" });
+        }
+        if (this.sawLine <= 0) { this.sawLine = R(1.4, 2.2); B.react("scared", 1.4, pick(chain ? ["AAAAH!", "A CHAINSAW?!", "Where did you even GET that?!", "This is not stress relief!", "I'm too young for this!"] : ["AAAAH!", "NOT THE SAW!", "That's a SAW!", "Put it down! PUT IT DOWN!", "I'm too young for this!"])); }
+        return;
+      }
+      // metal, props or walls: sparks
+      if (this.sawFx <= 0) { this.sawFx = 0.05; W.stars(h.point, 3, pick(["#ffe066", "#ffffff", "#ffa94d"])); }
+      let po = o; while (po && !(po.userData && po.userData.prop)) po = po.parent;
+      const prop = po && po.userData.prop;
+      if (prop) {
+        prop.sawT = (prop.sawT || 0) + dt;
+        if (prop.body.mass) { prop.body.wakeUp(); prop.body.applyImpulse(new CANNON.Vec3(dir.x, 0.2, dir.z).scale(dt * 6), prop.body.position); }
+        if (prop.kind === "limb" && this.sawFx <= 0.01) W.splash(h.point, "#9b0000", 4, 2, 0.02);
+        if ((prop.breakable || prop.balloon || prop.explosive) && prop.sawT > 0.6) W.toBreak.push(prop);
+      }
+    }
+
     shoot(ndc) {
       const W = this.world, B = this.buddy;
       const ray = W.rayFrom(ndc);

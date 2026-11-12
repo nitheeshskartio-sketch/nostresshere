@@ -89,6 +89,7 @@
   function selectTool(t) {
     if (tools.spraying) tools.stopSpray();
     brutal.showGun(t.kind === "gun");
+    brutal.showSaw(t.kind === "saw" ? t.variant : null);
     current = t;
     if (prefs.violence === "brutal") prefs.toolBrutal = t.id; else prefs.tool = t.id;
     save();
@@ -99,7 +100,7 @@
       const off = el.getBoundingClientRect().left - tray.getBoundingClientRect().left;
       tray.scrollTo({ left: tray.scrollLeft + off - (tray.clientWidth - el.offsetWidth) / 2, behavior: "smooth" });
     }
-    $("hint").textContent = t.kind === "gun" ? "Click to shoot · hold for rapid fire · headshots hurt more" : t.kind === "place" ? "Click the floor to place a gas cylinder · set it on fire or shoot it" : t.fluid === "petrol" ? "Hold to pour petrol · then throw a 🔥 Fire Stick" : t.kind === "drop" ? "Click anywhere to drop the anvil on their head" : t.kind === "spray" ? "Hold to spray water · it washes off the mess" : t.kind === "throw" ? "Click to throw · hold to keep throwing · drag the buddy to toss them" : "Click the buddy to " + (t.id === "slap" ? "slap" : "hit") + " · drag them to throw";
+    $("hint").textContent = t.kind === "saw" ? "Hold on the buddy to cut · " + (t.variant === "chainsaw" ? "chainsaws are even faster" : "an arm or leg takes about a second") : t.cut ? "Click to slash · cuts bleed and limbs come off fast" : t.kind === "gun" ? "Click to shoot · hold for rapid fire · headshots hurt more" : t.kind === "place" ? "Click the floor to place a gas cylinder · set it on fire or shoot it" : t.fluid === "petrol" ? "Hold to pour petrol · then throw a 🔥 Fire Stick" : t.kind === "drop" ? "Click anywhere to drop the anvil on their head" : t.kind === "spray" ? "Hold to spray water · it washes off the mess" : t.kind === "throw" ? "Click to throw · hold to keep throwing · drag the buddy to toss them" : "Click the buddy to " + (t.id === "slap" ? "slap" : "hit") + " · drag them to throw";
   }
 
   function checkUnlocks(before) {
@@ -191,6 +192,14 @@
 
   canvas.addEventListener("pointerdown", (e) => {
     S.audio.unlock();
+    if (e.button === 1 || e.button === 2) {
+      // right/middle drag: always look around
+      e.preventDefault();
+      down = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId };
+      Object.assign(down, world.camMode === "free" ? { mode: "look", yaw: world.free.yaw, pitch: world.free.pitch } : { mode: "orbit", az: world.orbit.az, el: world.orbit.el });
+      try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+      return;
+    }
     if (e.button !== undefined && e.button > 0) return;
     e.preventDefault();
     try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
@@ -202,6 +211,7 @@
       return;
     }
     const ch = ray.intersectObjects(buddy.hitMeshes, false)[0];
+    if (current.kind === "saw") { down = Object.assign(base, { mode: "saw" }); hideHint(); return; }
     if (current.kind === "gun") { brutal.shoot(ndc.clone()); down = Object.assign(base, { mode: "gun", last: performance.now() }); hideHint(); return; }
     if (current.kind === "place") { brutal.placeGas(aimPoint(ray), !!ch); down = Object.assign(base, { mode: "none" }); hideHint(); return; }
     if (current.kind === "drop" && !ch) { tools.drop(current); down = Object.assign(base, { mode: "none" }); hideHint(); return; }
@@ -219,7 +229,7 @@
     const ph = ray.intersectObjects(world.propGroup.children, true)[0];
     const prop = ph && findProp(ph.object);
     if (prop && current.kind === "melee") { tools.melee(current, { point: ph.point, prop }); down = Object.assign(base, { mode: "none" }); return; }
-    down = Object.assign(base, { mode: "orbit", az: world.orbit.az, el: world.orbit.el });
+    down = Object.assign(base, world.camMode === "free" ? { mode: "look", yaw: world.free.yaw, pitch: world.free.pitch } : { mode: "orbit", az: world.orbit.az, el: world.orbit.el });
   });
 
   canvas.addEventListener("pointermove", (e) => {
@@ -230,7 +240,10 @@
     const dx = e.clientX - down.x, dy = e.clientY - down.y;
     if (down.mode === "pending" && Math.hypot(dx, dy) > 9) startGrab();
     if (down.mode === "grab") { const p = new V3(); if (ray.ray.intersectPlane(down.plane, p)) buddy.grabMove(p); }
-    else if (down.mode === "orbit") {
+    else if (down.mode === "look") {
+      world.free.yaw = down.yaw - dx * 0.005;
+      world.free.pitch = THREE.MathUtils.clamp(down.pitch - dy * 0.004, -1.2, 0.9);
+    } else if (down.mode === "orbit") {
       world.orbit.az = THREE.MathUtils.clamp(down.az - dx * 0.006, -1.2, 1.2);
       world.orbit.el = THREE.MathUtils.clamp(down.el + dy * 0.004, 0.0, 0.6);
     } else if (down.mode === "spray") tools.aim.copy(aimPoint(ray));
@@ -264,6 +277,53 @@
     else if (e.key === "Escape") closePanel();
   });
 
+  /* ---------- free movement: WASD / arrows, Q/E turn, Shift run ---------- */
+  const move = { f: 0, b: 0, l: 0, r: 0, tl: 0, tr: 0, run: false, jx: 0, jy: 0 };
+  const MOVE_KEYS = { KeyW: "f", ArrowUp: "f", KeyS: "b", ArrowDown: "b", KeyA: "l", KeyD: "r", ArrowLeft: "tl", ArrowRight: "tr", KeyQ: "tl", KeyE: "tr" };
+  function goFree() {
+    if (world.camMode === "free") return;
+    world.enterFree();
+    camI = CAMS.findIndex((c) => c[0] === "free");
+    toast("🕹️ Free move: WASD to walk · drag to look · Shift to run · C for follow cam", 3200);
+  }
+  document.addEventListener("keydown", (e) => {
+    if (e.target.closest && e.target.closest("input, textarea, select")) return;
+    if (e.key === "Shift") move.run = true;
+    const k = MOVE_KEYS[e.code];
+    if (!k) return;
+    e.preventDefault();
+    move[k] = 1;
+    goFree();
+  });
+  document.addEventListener("keyup", (e) => {
+    if (e.key === "Shift") move.run = false;
+    const k = MOVE_KEYS[e.code];
+    if (k) move[k] = 0;
+  });
+  window.addEventListener("blur", () => Object.assign(move, { f: 0, b: 0, l: 0, r: 0, tl: 0, tr: 0, run: false }));
+  canvas.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    goFree();
+    const F = world.free, step = -Math.sign(e.deltaY) * 0.35;
+    F.pos.x += -Math.sin(F.yaw) * step; F.pos.z += -Math.cos(F.yaw) * step;
+    world.moveFree(0, {}, false);
+  }, { passive: false });
+
+  // on-screen joystick for touch screens
+  const joy = $("joy"), knob = $("joyKnob");
+  let joyId = null;
+  joy.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); joyId = e.pointerId; joy.setPointerCapture(e.pointerId); goFree(); joyMove(e); });
+  joy.addEventListener("pointermove", (e) => { if (e.pointerId === joyId) joyMove(e); });
+  const joyEnd = (e) => { if (e.pointerId !== joyId) return; joyId = null; move.jx = move.jy = 0; knob.style.transform = ""; };
+  joy.addEventListener("pointerup", joyEnd); joy.addEventListener("pointercancel", joyEnd);
+  function joyMove(e) {
+    const r = joy.getBoundingClientRect(), R = r.width / 2;
+    let x = (e.clientX - r.left - R) / R, y = (e.clientY - r.top - R) / R;
+    const l = Math.hypot(x, y); if (l > 1) { x /= l; y /= l; }
+    move.jx = x; move.jy = y;
+    knob.style.transform = "translate(" + x * R * 0.6 + "px," + y * R * 0.6 + "px)";
+  }
+
   /* =========================================================
      ACTION BUTTONS
      ========================================================= */
@@ -291,9 +351,13 @@
   /* =========================================================
      TOP BAR BUTTONS
      ========================================================= */
-  const CAMS = [["auto", "🎥 Follow cam"], ["front", "🎬 Front view"], ["side", "📐 Side view"], ["close", "🔍 Close-up"], ["wide", "🌄 Wide shot"]];
+  const CAMS = [["auto", "🎥 Follow cam"], ["free", "🕹️ Free move (WASD + drag to look)"], ["front", "🎬 Front view"], ["side", "📐 Side view"], ["close", "🔍 Close-up"], ["wide", "🌄 Wide shot"]];
   let camI = 0;
-  function cycleCam() { camI = (camI + 1) % CAMS.length; world.camMode = CAMS[camI][0]; world.orbit.az = 0; world.orbit.el = 0.12; toast(CAMS[camI][1]); }
+  function cycleCam() {
+    camI = (camI + 1) % CAMS.length;
+    if (CAMS[camI][0] === "free") world.enterFree(); else world.camMode = CAMS[camI][0];
+    world.orbit.az = 0; world.orbit.el = 0.12; toast(CAMS[camI][1]);
+  }
   $("camBtn").addEventListener("click", cycleCam);
 
   function applyStyle() { buddy.setStyle(prefs.style); $("styleBtn").title = prefs.style === "toon" ? "Style: Cartoon" : "Style: Realistic"; $("styleBtn").classList.toggle("on", prefs.style === "toon"); }
@@ -511,7 +575,7 @@
     const ua = h('<button type="button" class="btn">' + (prefs.unlockAll ? "🔒 Re-lock objects (earn them)" : "🔓 Unlock everything now (cheater!)") + "</button>");
     ua.addEventListener("click", () => { prefs.unlockAll = !prefs.unlockAll; save(); renderTray(); const n = panelName; panelName = null; openPanel(n); toast(prefs.unlockAll ? "🔓 Everything unlocked. We won't tell." : "🔒 Back to earning them."); });
     el.appendChild(ua);
-    el.appendChild(h('<p class="muted small">Keys: <b>1–0</b> pick object · <b>R</b> reset · <b>C</b> camera · <b>Esc</b> close panel</p>'));
+    el.appendChild(h('<p class="muted small">Keys: <b>WASD</b> move · <b>drag</b> / right-drag look · <b>Q/E</b> turn · <b>Shift</b> run · <b>wheel</b> step · <b>1–0</b> object · <b>R</b> reset · <b>C</b> camera</p>'));
   }
 
   /* =========================================================
@@ -731,6 +795,8 @@
   let last = performance.now();
   function step(rdt, now) {
     world.stepTime(rdt);
+    brutal.sawUpdate(rdt, ndc, !!(down && down.mode === "saw"));
+    if (world.camMode === "free") world.moveFree(rdt, { x: move.r - move.l + move.jx, z: move.f - move.b - move.jy, turn: move.tl - move.tr }, move.run);
     const dt = rdt * world.timeScale;
     if (down && down.mode === "gun" && now - down.last > 180) { down.last = now; brutal.shoot(ndc.clone()); }
     if (down && down.mode === "throw" && now - down.last > 230) {

@@ -41,7 +41,10 @@
     { id: "petrol", name: "Petrol Can", icon: "⛽", kind: "spray", fluid: "petrol", set: "brutal", unlock: 0 },
     { id: "torch", name: "Fire Stick", icon: "🔥", kind: "throw", proj: "torch", set: "brutal", unlock: 0 },
     { id: "gas", name: "Gas Cylinder", icon: "🛢️", kind: "place", set: "brutal", unlock: 0 },
-    { id: "gun", name: "Pistol", icon: "🔫", kind: "gun", set: "brutal", unlock: 0 }
+    { id: "gun", name: "Pistol", icon: "🔫", kind: "gun", set: "brutal", unlock: 0 },
+    { id: "knife", name: "Knife", icon: "🔪", kind: "melee", swing: "bat", power: 6, tc: 0.09, sound: "slice", set: "brutal", unlock: 0, L: 0.6, cut: true },
+    { id: "saw", name: "Saw Cutter", icon: "🪚", kind: "saw", variant: "saw", set: "brutal", unlock: 0 },
+    { id: "chainsaw", name: "Chainsaw", icon: "⛓️", kind: "saw", variant: "chainsaw", set: "brutal", unlock: 0 }
   ]);
   S.toolSet = (t) => t.set || "normal";
   S.toolById = (id) => TOOLS.find((t) => t.id === id);
@@ -127,6 +130,15 @@
         const hr = giant ? 0.11 : 0.03;
         mesh(new THREE.CylinderGeometry(hr, hr, L, 12), handleM, [0, L / 2, -headL / 2], g);
         if (giant) for (const z of [-0.02, -headL + 0.02]) { const cap = mesh(new THREE.SphereGeometry(headR, 24, 12), headM, [0, 0, z], g); cap.scale.set(1, 1, 0.25); }
+        break;
+      }
+      case "knife": {
+        const steel = mat("blade", () => std("#dee2e6", { metalness: 0.95, roughness: 0.12 }));
+        const blade = new THREE.Shape(); blade.moveTo(-0.022, 0.3); blade.lineTo(0.022, 0.3); blade.lineTo(0.024, 0.06); blade.quadraticCurveTo(0.01, 0, -0.012, -0.01); blade.lineTo(-0.022, 0.08); blade.closePath();
+        const bm = mesh(new THREE.ExtrudeGeometry(blade, { depth: 0.006, bevelEnabled: false }), steel, [0, 0, -0.003], g);
+        mesh(new THREE.BoxGeometry(0.07, 0.02, 0.025), mat("guard", () => std("#495057", { metalness: 0.8, roughness: 0.3 })), [0, 0.31, 0], g);
+        mesh(new THREE.CylinderGeometry(0.018, 0.02, L - 0.32, 10), mat("knifeh", () => std("#3b2a20", { roughness: 0.6 })), [0, 0.32 + (L - 0.32) / 2, 0], g);
+        bm.rotation.y = Math.PI / 2;
         break;
       }
       case "knuckles": {
@@ -392,9 +404,17 @@
         return;
       }
       const brutal = tool.set === "brutal";
-      const p = B.applyHit({ dir: fdir, power: tool.power, point, part: hit.part, tool: brutal ? { react: tool.id === "pan" ? ["dizzy", 2, "brutal"] : Math.random() < 0.5 ? ["ko", 1.2, "brutal"] : null } : tool, slap: tool.id === "slap" || tool.id === "pan", lift });
+      const limbHit = hit.part === "arm" || hit.part === "leg";
+      const p = B.applyHit({ dir: fdir, power: tool.power, point, part: hit.part, tool: brutal ? { react: tool.id === "pan" ? ["dizzy", 2, "brutal"] : Math.random() < 0.5 ? ["ko", 1.2, "brutal"] : null } : tool, slap: tool.id === "slap" || tool.id === "pan", lift, dmg: tool.cut && limbHit ? tool.power * 2.6 : undefined });
       if (tool.id === "pan" && hit.part === "head") B.dizzy = 2.5;
       if (brutal) this.gore(point, fdir, hit.part, hit.object, p);
+      if (tool.cut && hit.object && hit.object !== B.faceMesh) {
+        // a clean slash: long gash that keeps bleeding
+        B.addDecal(hit.object, point, fdir.clone().negate(), "#ffffff", 0.3, S.gashTex);
+        B.addBleed(hit.object, point, 2.5);
+        W.splash(point, "#b3001b", 22, 3.2, 0.028);
+      }
+      if (tool.cut && hit.part === "head") B.face.injure(10);
       else if (tool.id === "sponge") {
         B.wash(point, 0.6);
         if (hit.part === "head") { B.face.clean(0.45); B.face.wet = Math.min(1, B.face.wet + 0.4); }

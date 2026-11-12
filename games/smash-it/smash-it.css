@@ -313,3 +313,9 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
 .hp.hurt { animation: hpShake 0.25s; }
 @keyframes hpPulse { to { opacity: 0.45; } }
 @keyframes hpShake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+
+/* ---------- touch joystick (free move) ---------- */
+.joy { position: absolute; left: 14px; bottom: 150px; z-index: 6; width: 110px; height: 110px; border-radius: 50%; display: none; place-items: center;
+  background: color-mix(in srgb, var(--surface) 55%, transparent); border: 2px solid color-mix(in srgb, var(--border) 80%, transparent); backdrop-filter: blur(6px); touch-action: none; }
+.joy i { width: 46px; height: 46px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 70%, var(--surface)); box-shadow: var(--shadow-sm); transition: transform 0.05s; }
+@media (pointer: coarse) { .joy { display: grid; } }

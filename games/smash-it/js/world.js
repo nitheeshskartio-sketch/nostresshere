@@ -139,6 +139,8 @@
       this.camLook = new V3(0, 1.2, 0);
       this.camMode = "auto";
       this.orbit = { az: 0, el: 0.12 };
+      // free-move camera (WASD + mouse look)
+      this.free = { pos: new V3(0, 1.6, 5.4), yaw: 0, pitch: -0.08 };
       this.shakeAmt = 0;
       this.closeT = 0;
       this.timeScale = 1; this.slowT = 0;
@@ -446,7 +448,34 @@
       this.updateCamera(rdt, buddy);
     }
 
+    enterFree() {
+      const d = new V3(); this.camera.getWorldDirection(d);
+      this.free.pos.copy(this.camera.position); this.free.pos.y = 1.6;
+      this.free.yaw = Math.atan2(-d.x, -d.z);
+      this.free.pitch = THREE.MathUtils.clamp(Math.asin(THREE.MathUtils.clamp(d.y, -1, 1)), -1.2, 0.9);
+      this.camMode = "free";
+    }
+    freeDir() { const F = this.free; return new V3(-Math.sin(F.yaw) * Math.cos(F.pitch), Math.sin(F.pitch), -Math.cos(F.yaw) * Math.cos(F.pitch)); }
+    // mv: x = strafe right, z = forward, turn = left(+)/right(-)
+    moveFree(rdt, mv, run) {
+      const F = this.free;
+      F.yaw += (mv.turn || 0) * rdt * 1.9;
+      const fwd = new V3(-Math.sin(F.yaw), 0, -Math.cos(F.yaw)), right = new V3(Math.cos(F.yaw), 0, -Math.sin(F.yaw));
+      const v = fwd.multiplyScalar(mv.z || 0).add(right.multiplyScalar(mv.x || 0));
+      if (v.lengthSq() > 1) v.normalize();
+      F.pos.addScaledVector(v, (run ? 6.5 : 3.6) * rdt);
+      F.pos.x = THREE.MathUtils.clamp(F.pos.x, -ARENA.x + 0.3, ARENA.x - 0.3);
+      F.pos.z = THREE.MathUtils.clamp(F.pos.z, ARENA.zBack + 0.3, 9);
+    }
+
     updateCamera(rdt, buddy) {
+      if (this.camMode === "free") {
+        this.camera.position.lerp(this.free.pos, 1 - Math.exp(-rdt * 14));
+        this.camLook.copy(this.camera.position).add(this.freeDir());
+        this.camera.lookAt(this.camLook);
+        if (this.shakeAmt > 0) { const a = this.shakeAmt * 0.04; this.camera.position.add(new V3(R(-a, a), R(-a, a), R(-a, a))); this.shakeAmt = Math.max(0, this.shakeAmt - rdt * 12); }
+        return;
+      }
       const focus = buddy ? buddy.com.clone() : new V3(0, 1, 0);
       focus.x = THREE.MathUtils.clamp(focus.x, -4, 4);
       focus.y = THREE.MathUtils.clamp(focus.y, 0.5, 3.5);

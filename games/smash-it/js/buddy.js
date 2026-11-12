@@ -539,6 +539,14 @@
       this.build();
     }
     revive() { this.restore(); this.reset(); }
+    addBleed(mesh, point, t) {
+      if (!mesh || !mesh.parent) return;
+      const o = new THREE.Object3D();
+      o.position.copy(mesh.worldToLocal(point.clone()));
+      mesh.add(o);
+      this.bleeds.push({ obj: o, t: t || 2.5, acc: 0 });
+      if (this.bleeds.length > 14) this.bleeds.shift();
+    }
     updateBleeding(dt) {
       const W = this.world;
       for (const b of this.bleeds) {
@@ -708,6 +716,15 @@
       else if (this.state === "getup") this.updateGetup(dt);
       else if (this.state === "grabbed") this.updateGrabbed(dt, A);
       else if (this.state === "shake") this.updateShake(dt);
+
+      // never leave the room, whatever state we're in (sliding while down, panic running, walking…)
+      const m = 0.4;
+      const cx = clamp(this.com.x, -A.x + m, A.x - m), cz = clamp(this.com.z, A.zBack + m, A.zFront - m);
+      if (cx !== this.com.x) { this.com.x = cx; this.vel.x *= -0.3; }
+      if (cz !== this.com.z) { this.com.z = cz; this.vel.z *= -0.3; }
+      this.feet.x = clamp(this.feet.x, -A.x + m, A.x - m);
+      this.feet.z = clamp(this.feet.z, A.zBack + m, A.zFront - m);
+      if (this.panicTo) { this.panicTo.x = clamp(this.panicTo.x, -A.x + 1, A.x - 1); this.panicTo.z = clamp(this.panicTo.z, A.zBack + 1, A.zFront - 1); }
 
       // velocity / acceleration → limbs swing with inertia
       const v = this.com.clone().sub(prev).divideScalar(Math.max(dt, 1e-4));
