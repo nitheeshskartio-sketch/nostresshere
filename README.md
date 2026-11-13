@@ -23,6 +23,7 @@ games/draw-and-play/     Draw & Play colouring book (js/art.js pages, engine.js 
 games/sand-therapy/      Sand Therapy (3D kinetic sand: js/sand.js height-map engine, js/app.js tools & UI)
 games/break-everything/  Break Everything (3D destruction: js/objects.js materials & fracture, world.js physics/rooms/replay, tools.js, game.js modes & stats)
 games/sky-assault/       Sky Assault (vertical shooter on canvas: js/data.js content & stage generator, art.js sprites & terrain, engine.js, ui.js menus & saves)
+games/firework-therapy/  Firework Therapy (canvas fireworks: js/fx.js engine, shapes & skies, audio.js, app.js modes, show creator & saves)
 assets/vendor/          three.js r169 + cannon-es 0.20 wrapped as plain scripts (work from file://)
 ```
 

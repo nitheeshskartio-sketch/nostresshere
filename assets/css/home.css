@@ -368,3 +368,13 @@
 @keyframes skpEnemy { 0% { transform: translateY(-10px) rotate(135deg); opacity: 1; } 70% { transform: translateY(40px) rotate(135deg); opacity: 1; } 75%, 100% { transform: translateY(40px) rotate(135deg) scale(1.6); opacity: 0; } }
 @keyframes skpShot { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-110px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .skp-jet, .skp-enemy, .skp i { animation: none; } }
+
+/* firework therapy preview */
+.fw-preview { background: radial-gradient(ellipse at 50% 120%, #1c2d52, #050816 70%); overflow: hidden; }
+.fwp { position: relative; width: 220px; height: 160px; }
+.fwp span { position: absolute; width: 90px; height: 90px; border-radius: 50%; background: repeating-conic-gradient(var(--c) 0 4deg, transparent 4deg 18deg); -webkit-mask: radial-gradient(circle, transparent 18%, #000 22%, #000 48%, transparent 70%); mask: radial-gradient(circle, transparent 18%, #000 22%, #000 48%, transparent 70%); filter: drop-shadow(0 0 6px var(--c)); animation: fwpBoom 2.4s ease-out infinite; opacity: 0; }
+.fwp .b1 { --c: #ff5fc8; left: 10px; top: 10px; }
+.fwp .b2 { --c: #ffc45a; left: 110px; top: 0; animation-delay: 0.8s; }
+.fwp .b3 { --c: #3b8bff; left: 70px; top: 60px; animation-delay: 1.6s; }
+@keyframes fwpBoom { 0% { transform: scale(0.1); opacity: 0; } 10% { opacity: 1; } 70% { transform: scale(1.1); opacity: 0.9; } 100% { transform: scale(1.2) translateY(10px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .fwp span { animation: none; opacity: 1; } }

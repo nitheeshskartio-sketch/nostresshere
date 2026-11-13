@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>Firework Therapy · No Stress Here</title>
+  <meta name="description" content="Tap the night sky to launch fireworks. Hearts, willows, rainbows and your own shows. No rules, just light." />
+  <script src="../../assets/js/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../../assets/css/base.css" />
+  <link rel="stylesheet" href="fireworks.css" />
+</head>
+<body class="fw-body">
+  <header class="site-header">
+    <a class="logo" href="../../index.html"><span class="logo-mark" aria-hidden="true"></span>No Stress <span class="here">Here</span></a>
+    <div class="header-actions">
+      <a class="pill-btn" href="../../index.html" title="Back to all games">← <span class="theme-label">Games</span></a>
+      <button class="pill-btn" type="button" data-theme-toggle aria-pressed="false">
+        <span class="theme-icon" aria-hidden="true"></span><span class="theme-label">Dark</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="fw-app" id="app">
+    <canvas id="sky" aria-label="Night sky. Tap, hold or drag to launch fireworks."></canvas>
+
+    <div class="top" id="top">
+      <div class="mode-pill" id="modePill"></div>
+      <div class="top-right">
+        <button class="ib" type="button" id="hideBtn" title="Hide controls (H)">👁</button>
+      </div>
+    </div>
+    <div class="tip" id="tip"></div>
+    <div class="rec" id="recBadge" hidden>⏺ REC <span id="recCount">0</span></div>
+
+    <div class="drawer" id="drawer" hidden></div>
+
+    <nav class="toolbar" id="toolbar" aria-label="Fireworks controls">
+      <button class="tb" type="button" data-t="menu" title="Main menu">🏠</button>
+      <button class="tb wide" type="button" data-t="type" title="Choose a firework"><span id="typeIcon">🎆</span><span class="lbl" id="typeName">Round</span></button>
+      <button class="tb wide" type="button" data-t="colour" title="Colours"><span class="dots" id="colourDots"></span><span class="lbl">Colours</span></button>
+      <button class="tb" type="button" data-t="settings" title="Explosion settings">⚙️</button>
+      <button class="tb" type="button" data-t="sky" title="Background">🌌</button>
+      <button class="tb" type="button" data-t="show" title="Show creator">🎬</button>
+      <button class="tb" type="button" data-t="sound" title="Sound" id="soundTb">🔊</button>
+      <button class="tb" type="button" data-t="slow" title="Slow motion (S)" id="slowTb">🐢</button>
+      <button class="tb" type="button" data-t="clear" title="Clear the sky (C)">🧹</button>
+      <button class="tb" type="button" data-t="full" title="Fullscreen">⤢</button>
+    </nav>
+
+    <div class="menu" id="menu">
+      <div class="menu-card">
+        <div class="menu-burst" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <h1>Firework Therapy</h1>
+        <p>Touch the sky. Watch it bloom. No rules, no limits — just light.</p>
+        <div class="menu-btns">
+          <button class="mbtn primary" type="button" data-m="free">🎆 Start Fireworks</button>
+          <button class="mbtn" type="button" data-m="modes">🎮 Game Modes</button>
+          <div class="mrow"><button class="mbtn" type="button" data-m="collection">🎇 Firework Collection</button><button class="mbtn" type="button" data-m="skies">🌌 Backgrounds</button></div>
+          <div class="mrow"><button class="mbtn" type="button" data-m="shows">🎬 My Shows</button><button class="mbtn" type="button" data-m="relax">🌙 Relaxation Mode</button></div>
+          <button class="mbtn" type="button" data-m="achievements">🏆 Achievements</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal" hidden><div class="modal-card" id="modalCard"></div></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/fx.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
