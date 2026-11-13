@@ -398,3 +398,16 @@
 @keyframes gwpIn { 0% { opacity: 0; transform: translateY(6px); } 10%, 85% { opacity: 1; transform: none; } 100% { opacity: 0; } }
 @keyframes gwpQ { 50% { transform: rotate(14deg) scale(1.1); } }
 @media (prefers-reduced-motion: reduce) { .gwp i, .gwq { animation: none; opacity: 1; } }
+
+/* hangman preview */
+.hm-preview { background: linear-gradient(#c5f6fa, #fff9db); }
+[data-theme="dark"] .hm-preview { background: linear-gradient(#1b1f3b, #3b3f75); }
+.hmp { display: grid; justify-items: center; gap: 14px; }
+.hmp-buddy { font-size: 2.6rem; display: inline-block; transform-origin: 50% 0; animation: hmpSway 2.4s ease-in-out infinite; }
+.hmp-word { display: flex; gap: 6px; }
+.hmp-word b { width: 26px; height: 34px; border-bottom: 4px solid var(--text); display: grid; place-items: center; font-size: 1.4rem; animation: hmpPop 3s ease-in-out infinite; }
+.hmp-word b:empty::after { content: "E"; opacity: 0; animation: hmpFill 3s ease-in-out infinite; }
+@keyframes hmpSway { 50% { transform: rotate(10deg); } }
+@keyframes hmpPop { 0%, 60% { transform: none; } 70% { transform: translateY(-6px); } 80% { transform: none; } }
+@keyframes hmpFill { 0%, 45% { opacity: 0; } 55%, 100% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .hmp-buddy, .hmp-word b, .hmp-word b:empty::after { animation: none; opacity: 1; } }

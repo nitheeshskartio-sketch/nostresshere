@@ -26,6 +26,7 @@ games/sky-assault/       Sky Assault (vertical shooter on canvas: js/data.js con
 games/firework-therapy/  Firework Therapy (canvas fireworks: js/fx.js engine, shapes & skies, audio.js, app.js modes, show creator & saves)
 games/domino-universe/   Domino Universe (3D dominoes: js/data.js types, patterns & 20 levels, world.js physics/camera/replay, build.js tools, app.js modes & saves)
 games/guess-who/         Guess Who? (clue quiz: js/core.js matching & categories, q-*.js question bank, app.js modes & progress)
+games/hangman/           Hangman (js/words.js 520-word bank in 13 categories × 5 tiers, app.js modes, hints, shop & stats)
 assets/vendor/          three.js r169 + cannon-es 0.20 wrapped as plain scripts (work from file://)
 ```
 
