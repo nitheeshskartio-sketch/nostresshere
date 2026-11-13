@@ -22,6 +22,7 @@ games/smash-it/         Smash It (3D: three.js + cannon-es; js/ = audio, face, w
 games/draw-and-play/     Draw & Play colouring book (js/art.js pages, engine.js paint engine, app.js UI)
 games/sand-therapy/      Sand Therapy (3D kinetic sand: js/sand.js height-map engine, js/app.js tools & UI)
 games/break-everything/  Break Everything (3D destruction: js/objects.js materials & fracture, world.js physics/rooms/replay, tools.js, game.js modes & stats)
+games/sky-assault/       Sky Assault (vertical shooter on canvas: js/data.js content & stage generator, art.js sprites & terrain, engine.js, ui.js menus & saves)
 assets/vendor/          three.js r169 + cannon-es 0.20 wrapped as plain scripts (work from file://)
 ```
 

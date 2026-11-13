@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>Sky Assault · No Stress Here</title>
+  <meta name="description" content="A vertical-scrolling arcade air combat game: fly, shoot, dodge, rescue, upgrade and take down giant bosses across 6 worlds." />
+  <script src="../../assets/js/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../../assets/css/base.css" />
+  <link rel="stylesheet" href="sky.css" />
+</head>
+<body class="sky-body">
+  <header class="site-header">
+    <a class="logo" href="../../index.html"><span class="logo-mark" aria-hidden="true"></span>No Stress <span class="here">Here</span></a>
+    <div class="header-actions">
+      <a class="pill-btn" href="../../index.html" title="Back to all games">← <span class="theme-label">Games</span></a>
+      <button class="pill-btn" type="button" data-theme-toggle aria-pressed="false">
+        <span class="theme-icon" aria-hidden="true"></span><span class="theme-label">Dark</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="sky-app" id="app">
+    <div class="sky-frame" id="frame">
+      <canvas id="game" aria-label="Sky Assault game"></canvas>
+      <div class="hud-btns" id="hudBtns" hidden>
+        <button class="pause-btn" type="button" id="pauseBtn" title="Pause (Esc)">⏸</button>
+        <div class="specials" id="specials"></div>
+      </div>
+    </div>
+    <div class="ui" id="ui" hidden></div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/art.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/ui.js"></script>
+</body>
+</html>
