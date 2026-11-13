@@ -188,3 +188,15 @@ button { font-family: inherit; }
   .theme-label { display: none; }
   .logo { font-size: 1.1rem; }
 }
+
+/* ---------- ad slots (hidden until ads are switched on in assets/js/ads.js) ---------- */
+.ad-slot[hidden] { display: none !important; }
+.ad-slot { display: block; width: 100%; max-width: 970px; min-height: 140px; margin: 28px auto; padding: 22px 10px 10px; position: relative; border-radius: 18px; background: var(--surface-2); border: 1px solid var(--border); text-align: center; overflow: hidden; contain: layout paint; }
+.ad-slot::before { content: "Advertisement"; position: absolute; top: 5px; left: 0; right: 0; font-size: 0.66rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.ad-slot.ad-preview { display: grid; place-items: center; border: 2px dashed var(--accent); color: var(--muted); font-weight: 600; font-size: 0.85rem; }
+.game-grid > .ad-slot { grid-column: 1 / -1; margin: 0; }
+.ad-mark { display: block; height: 1px; }
+.ad-slot { flex-shrink: 0; }
+/* never show an ad while a full-screen game is being played */
+.draw-body.playing .ad-slot, body.playing .ad-slot.game-ad { display: none !important; }
+.ad-slot.game-ad { margin: 24px auto 32px; width: calc(100% - 32px); }

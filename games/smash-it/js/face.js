@@ -39,6 +39,7 @@
       this.img = null;
       this.adj = { x: 0, y: 0, zoom: 1, rot: 0 };
       this.skin = "#f1c27d";
+      this.realistic = true; this.browColor = "#3b2a20"; this.irisColor = "#6b4a2b"; this.irisColor2 = "#4a3018";
       this.expr = "neutral"; this.exprT = 0;
       this.look = { x: 0, y: 0 };
       this.blinkT = 2; this.blink = 0;
@@ -100,7 +101,13 @@
       return "#" + hex(r) + hex(g) + hex(b);
     }
 
-    setSkin(hex) { this.skin = hex; this.dirty = true; }
+    setSkin(hex) {
+      this.skin = hex; this.dirty = true;
+      // lips: the skin tone pushed towards a muted rose
+      const n = parseInt(hex.slice(1), 16), r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+      const mix = (k, cr, cg, cb) => "rgb(" + Math.round(r * (1 - k) + cr * k) + "," + Math.round(g * (1 - k) + cg * k) + "," + Math.round(b * (1 - k) + cb * k) + ")";
+      this.lipTop = mix(0.45, 150, 55, 65); this.lipBot = mix(0.38, 175, 80, 85);
+    }
 
     /* ---------- expressions ---------- */
     setExpression(name, dur) {
@@ -158,6 +165,14 @@
       // the cartoon features are drawn a bit bigger than the photo guides
       c.save(); c.translate(256, 290); c.scale(1.45, 1.45); c.translate(-256, -290);
       if (this.costume) this.drawCostume(c, "under");
+      if (this.realistic) {
+        this.drawRealFace(c, e, eye, brow, mouth, t);
+        if (e === "cry") this.drawTears(c, t);
+        if (e === "confused" || e === "scared" || e === "hurt") this.drawSweat(c, t);
+        if (this.costume) this.drawCostume(c, "over");
+        c.restore();
+        return;
+      }
       // blush
       if (["laugh", "happy", "comfy", "hurt", "cry"].includes(e)) {
         c.fillStyle = "rgba(255,90,120,0.28)";
@@ -170,6 +185,157 @@
       if (e === "cry") this.drawTears(c, t);
       if (e === "confused" || e === "scared" || e === "hurt") this.drawSweat(c, t);
       if (this.costume) this.drawCostume(c, "over");
+      c.restore();
+    }
+
+    /* =========================================================
+       REALISTIC FACE (Realistic style): same expressions, human features
+       ========================================================= */
+    drawRealFace(c, e, eye, brow, mouth, t) {
+      const [lx, ly] = EYE_L, [rx, ry] = EYE_R, [mx, my] = MOUTH;
+      const shade = (x, y, rX, rY, col) => { c.save(); c.translate(x, y); c.scale(1, rY / rX); const g = c.createRadialGradient(0, 0, 0, 0, 0, rX); g.addColorStop(0, col); g.addColorStop(1, "rgba(0,0,0,0)"); c.fillStyle = g; c.beginPath(); c.arc(0, 0, rX, 0, 7); c.fill(); c.restore(); };
+      // soft modelling of the face: sockets, cheeks, nose sides, under-lip and jaw
+      for (const x of [lx, rx]) shade(x, ly + 2, 56, 40, "rgba(90,45,35,0.16)");
+      const warm = ["laugh", "happy", "comfy", "hurt", "cry", "angry"].includes(e) ? 0.2 : 0.1;
+      for (const x of [lx - 18, rx + 18]) shade(x, 312, 52, 38, "rgba(215,85,75," + warm + ")");
+      shade(256, 268, 30, 70, "rgba(255,255,255,0.08)");
+      for (const x of [232, 280]) shade(x, 286, 14, 40, "rgba(90,45,35,0.10)");
+      shade(256, 310, 22, 7, "rgba(70,35,30,0.2)");
+      shade(256, my + 38, 36, 11, "rgba(80,40,30,0.16)");
+      shade(256, 160, 120, 30, "rgba(255,255,255,0.05)");
+      // nostrils (the 3D nose sits on top of these)
+      c.fillStyle = "rgba(60,25,25,0.28)";
+      for (const s of [-1, 1]) { c.beginPath(); c.ellipse(256 + s * 8, 304, 4.5, 2.4, s * 0.35, 0, 7); c.fill(); }
+      // eyes
+      const look = this.look;
+      const spin = eye === "spiral";
+      const E = {
+        open: { open: 1 }, wide: { open: 1.3 }, half: { open: 0.45 }, blink: { closed: true }, happy: { closed: true, smile: true },
+        sad: { open: 0.75, sad: true }, squeeze: { closed: true, squeeze: true }, x: { closed: true }, spiral: { open: 0.85 }
+      }[eye] || { open: 1 };
+      for (const [x, y, side] of [[lx, ly, -1], [rx, ry, 1]]) {
+        const lk = spin ? { x: Math.cos(t * 4 + side) * 0.8, y: Math.sin(t * 4 + side) * 0.6 } : look;
+        this.drawRealEye(c, x, y, side, E, lk);
+      }
+      this.drawRealBrows(c, brow);
+      this.drawLips(c, mouth, t);
+    }
+
+    drawRealEye(c, x, y, side, E, lk) {
+      const w = 30, top = 21 * (E.open || 0), bot = 12;
+      const lash = "#1d1410";
+      c.save(); c.lineCap = "round"; c.lineJoin = "round";
+      // crease above the eye
+      c.strokeStyle = "rgba(90,50,40,0.32)"; c.lineWidth = 2.2;
+      c.beginPath(); c.moveTo(x - w + 4, y - 8); c.quadraticCurveTo(x + side * 4, y - 36 - (E.open > 1 ? 6 : 0), x + w - 2, y - 6); c.stroke();
+      if (E.closed) {
+        const dy = E.smile ? -4 : E.squeeze ? 2 : 3;
+        c.strokeStyle = lash; c.lineWidth = 4.5;
+        c.beginPath(); c.moveTo(x - w, y); c.quadraticCurveTo(x, y + (E.smile ? -10 : 8) + dy, x + w, y); c.stroke();
+        c.lineWidth = 1.8;
+        c.lineWidth = 1.3;
+        for (let i = 1; i < 6; i++) { const u = i / 6, px = x - w + u * 2 * w, py = y + (E.smile ? -10 : 8) * 2 * u * (1 - u) * 2 * 0.5 + dy * 0.5; c.beginPath(); c.moveTo(px, py); c.lineTo(px + (u - 0.5) * 5, py + 4); c.stroke(); }
+        if (E.squeeze) { c.strokeStyle = "rgba(90,50,40,0.45)"; c.lineWidth = 2; for (const k of [0, 1]) { c.beginPath(); c.moveTo(x + side * (w + 4), y - 8 + k * 10); c.lineTo(x + side * (w + 16), y - 12 + k * 14); c.stroke(); } }
+        if (E.smile) { c.strokeStyle = "rgba(90,50,40,0.3)"; c.lineWidth = 2; c.beginPath(); c.moveTo(x - w + 6, y + 14); c.quadraticCurveTo(x, y + 22, x + w - 6, y + 14); c.stroke(); }
+        c.restore(); return;
+      }
+      // almond-shaped opening
+      const almond = () => { c.beginPath(); c.moveTo(x - w, y + 2); c.bezierCurveTo(x - w * 0.55, y - top - 4, x + w * 0.45, y - top - 6, x + w, y - (E.sad ? -3 : 1)); c.bezierCurveTo(x + w * 0.5, y + bot + 2, x - w * 0.5, y + bot + 2, x - w, y + 2); c.closePath(); };
+      almond(); c.save(); c.clip();
+      const sg = c.createRadialGradient(x, y - 2, 4, x, y, w + 4); sg.addColorStop(0, "#fbf8f2"); sg.addColorStop(0.75, "#eee4da"); sg.addColorStop(1, "#d9b8ae");
+      c.fillStyle = sg; c.fillRect(x - w - 4, y - 40, w * 2 + 8, 70);
+      // iris + pupil
+      const ir = 13, ix = x + lk.x * 11, iy = y + lk.y * 6 - 1;
+      const ig = c.createRadialGradient(ix, iy, 2, ix, iy, ir); ig.addColorStop(0, this.irisColor || "#6b4a2b"); ig.addColorStop(0.7, this.irisColor2 || "#4a3018"); ig.addColorStop(1, "#22150b");
+      c.fillStyle = ig; c.beginPath(); c.arc(ix, iy, ir, 0, 7); c.fill();
+      c.strokeStyle = "rgba(20,12,6,0.6)"; c.lineWidth = 1.6; c.stroke();
+      c.strokeStyle = "rgba(255,230,190,0.18)"; c.lineWidth = 1;
+      for (let a = 0; a < 6.28; a += 0.5) { c.beginPath(); c.moveTo(ix + Math.cos(a) * 6, iy + Math.sin(a) * 6); c.lineTo(ix + Math.cos(a) * 11, iy + Math.sin(a) * 11); c.stroke(); }
+      c.fillStyle = "#0b0705"; c.beginPath(); c.arc(ix, iy, E.open > 1 ? 4.2 : 5.4, 0, 7); c.fill();
+      // shadow from the upper lid + a catch-light
+      const lg = c.createLinearGradient(0, y - top - 6, 0, y - top + 12); lg.addColorStop(0, "rgba(40,20,15,0.45)"); lg.addColorStop(1, "rgba(40,20,15,0)");
+      c.fillStyle = lg; c.fillRect(x - w - 4, y - top - 8, w * 2 + 8, 22);
+      c.fillStyle = "rgba(255,255,255,0.92)"; c.beginPath(); c.ellipse(ix + 4, iy - 5, 3.4, 2.6, -0.4, 0, 7); c.fill();
+      c.restore();
+      // pink inner corner
+      c.fillStyle = "rgba(220,120,120,0.55)"; c.beginPath(); c.ellipse(x - side * (w - 3), y + 2, 4, 3, 0, 0, 7); c.fill();
+      // lash line (upper) and soft lower lid
+      c.strokeStyle = lash; c.lineWidth = 4;
+      c.beginPath(); c.moveTo(x - w, y + 2); c.bezierCurveTo(x - w * 0.55, y - top - 4, x + w * 0.45, y - top - 6, x + w, y - (E.sad ? -3 : 1)); c.stroke();
+      c.lineWidth = 1.6;
+      c.lineWidth = 1.3;
+      for (let i = 0; i < 6; i++) { const u = side > 0 ? 0.45 + i * 0.1 : 0.05 + i * 0.1, px = x - w + u * 2 * w, py = y - top * 4 * u * (1 - u) * 0.95 - 2; const out = (u - 0.5) * 2; c.beginPath(); c.moveTo(px, py); c.quadraticCurveTo(px + out * 3, py - 3, px + out * 6, py - 4); c.stroke(); }
+      c.strokeStyle = "rgba(80,40,30,0.4)"; c.lineWidth = 1.8;
+      c.beginPath(); c.moveTo(x - w + 4, y + 4); c.bezierCurveTo(x - w * 0.5, y + bot + 3, x + w * 0.5, y + bot + 3, x + w - 2, y + 1); c.stroke();
+      if (E.sad) { c.strokeStyle = "rgba(90,50,40,0.25)"; c.beginPath(); c.moveTo(x - w + 8, y + bot + 10); c.quadraticCurveTo(x, y + bot + 16, x + w - 8, y + bot + 10); c.stroke(); }
+      c.restore();
+    }
+
+    drawRealBrows(c, kind) {
+      if (kind === "none") return;
+      const col = this.browColor || "#3b2a20";
+      for (const [ex, side] of [[EYE_L[0], -1], [EYE_R[0], 1]]) {
+        let a = 0, dy = 0;
+        if (kind === "raised") dy = -12;
+        if (kind === "angry") a = -0.32 * side;
+        if (kind === "sad") a = 0.3 * side;
+        if (kind === "oneUp" && side > 0) { dy = -16; a = 0.12; }
+        c.save(); c.translate(ex, EYE_L[1] - 44 + dy); c.rotate(a);
+        // brow made of individual hair strokes: thick at the inside, thin at the tail
+        c.lineCap = "round";
+        for (let i = 0; i < 42; i++) {
+          const u = i / 41, xx = -side * 30 + side * u * 64, yy = -Math.sin(u * Math.PI * 0.9) * 8 + (u < 0.15 ? 3 : 0);
+          const th = 9 * (1 - u * 0.75);
+          c.strokeStyle = col; c.globalAlpha = 0.55 + ((i * 37) % 10) / 25; c.lineWidth = 1.7;
+          c.beginPath(); c.moveTo(xx + ((i * 13) % 5) - 2, yy + th * 0.5); c.lineTo(xx + side * 7, yy - th * 0.5); c.stroke();
+        }
+        c.globalAlpha = 1; c.restore();
+      }
+    }
+
+    drawLips(c, kind, t) {
+      const [x, y] = MOUTH;
+      const w = 42;
+      const top = this.lipTop || "#b8656a", bot = this.lipBot || "#c97578";
+      // where the corners of the mouth go for each expression
+      const cornerY = { smile: -9, grin: -12, smirk: 0, cry: 12, teeth: 2, o: 4, wavy: 4, tongue: 2, squiggle: 3, flat: 1 }[kind] ?? 1;
+      const open = { grin: 24, cry: 26, teeth: 14, o: 30, wavy: 16, tongue: 22 }[kind] || 0;
+      const ow = kind === "o" ? 22 : w;
+      const L = x - ow, Rr = x + ow, cl = y + cornerY, cr = y + (kind === "smirk" ? -12 : cornerY);
+      c.save(); c.lineJoin = "round"; c.lineCap = "round";
+      const avg = (cl + cr) / 2, q = (mid) => 2 * mid - avg;   // quadratic control point that passes through "mid"
+      const openTop = y - 4, openBot = y + open + (kind === "grin" ? 6 : 0);
+      // dark opening with teeth / tongue
+      if (open) {
+        c.fillStyle = "#3a1218";
+        c.beginPath(); c.moveTo(L, cl); c.quadraticCurveTo(x, q(openTop + (kind === "cry" ? 5 : 0)), Rr, cr); c.quadraticCurveTo(x, q(openBot), L, cl); c.fill();
+        c.save(); c.clip();
+        if (kind !== "o" && kind !== "cry") { c.fillStyle = "#f4efe6"; c.fillRect(L, openTop - 6, ow * 2, 13); c.strokeStyle = "rgba(150,140,130,0.6)"; c.lineWidth = 1; for (let i = -3; i <= 3; i++) { c.beginPath(); c.moveTo(x + i * 11, openTop - 6); c.lineTo(x + i * 11, openTop + 7); c.stroke(); } }
+        if (kind === "teeth" || kind === "wavy") { c.fillStyle = "#ece6dc"; c.fillRect(L, openBot - 9, ow * 2, 10); }
+        if (kind === "tongue" || kind === "grin") { c.fillStyle = "#c4505e"; c.beginPath(); c.ellipse(x + (kind === "tongue" ? 6 : 0), openBot, 20, 10, 0, 0, 7); c.fill(); }
+        c.restore();
+        if (kind === "tongue") { c.fillStyle = "#d4606c"; c.beginPath(); c.ellipse(x + 8, openBot + 9 + Math.sin(t * 6) * 3, 13, 14, 0.2, 0, 7); c.fill(); c.strokeStyle = "rgba(120,30,40,0.5)"; c.lineWidth = 1.5; c.beginPath(); c.moveTo(x + 8, openBot + 1); c.lineTo(x + 8, openBot + 16); c.stroke(); }
+      }
+      // upper lip with a cupid's bow
+      const midTop = open ? openTop : y;
+      const ul = (yy) => { c.moveTo(L, cl); c.bezierCurveTo(x - ow * 0.6, yy - 5, x - 14, yy - 12, x - 7, yy - 10); c.quadraticCurveTo(x, yy - 6, x + 7, yy - 10); c.bezierCurveTo(x + 14, yy - 12, x + ow * 0.6, yy - 5, Rr, cr); };
+      c.fillStyle = top; c.beginPath(); ul(midTop); c.quadraticCurveTo(x, q(midTop + 1), L, cl); c.fill();
+      // lower lip: a smooth band under the mouth line / opening
+      const lowY = open ? openBot : y + 1;
+      c.fillStyle = bot; c.beginPath(); c.moveTo(L, cl); c.quadraticCurveTo(x, q(lowY), Rr, cr); c.quadraticCurveTo(x, q(lowY + 13), L, cl); c.fill();
+      const hg = c.createRadialGradient(x, lowY + 6, 1, x, lowY + 6, 16); hg.addColorStop(0, "rgba(255,255,255,0.3)"); hg.addColorStop(1, "rgba(255,255,255,0)");
+      c.fillStyle = hg; c.beginPath(); c.ellipse(x, lowY + 6, 16, 5, 0, 0, 7); c.fill();
+      // the line where the lips meet
+      if (!open) {
+        c.strokeStyle = "rgba(70,20,25,0.75)"; c.lineWidth = 2.4; c.beginPath(); c.moveTo(L, cl);
+        if (kind === "squiggle") { for (let i = 1; i <= 8; i++) c.lineTo(L + i * (ow * 2 / 8), y + (i % 2 ? -3 : 3)); }
+        else c.quadraticCurveTo(x, q(y + 1), Rr, cr);
+        c.stroke();
+        c.strokeStyle = "rgba(90,45,35,0.35)"; c.lineWidth = 2;
+        for (const [cx, cy, s] of [[L, cl, -1], [Rr, cr, 1]]) { c.beginPath(); c.moveTo(cx + s * 2, cy); c.lineTo(cx + s * 6, cy + (cornerY < -4 ? -4 : 3)); c.stroke(); }
+      }
+      // smile lines when grinning
+      if (kind === "smile" || kind === "grin") { c.strokeStyle = "rgba(110,55,45,0.13)"; c.lineWidth = 3; for (const s of [-1, 1]) { c.beginPath(); c.moveTo(x + s * 54, y - 40); c.quadraticCurveTo(x + s * 66, y - 4, x + s * 52, y + 22); c.stroke(); } }
       c.restore();
     }
 

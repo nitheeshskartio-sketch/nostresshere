@@ -27,6 +27,7 @@
     { id: "water", name: "Water Spray", icon: "💦", kind: "spray", unlock: 110, set: "both" },
     { id: "inflatable", name: "Giant Inflatable Hammer", icon: "🎪", kind: "melee", swing: "giant", power: 9, tc: 0.34, sound: "squeak", unlock: 130, L: 1.9 },
     { id: "confetti", name: "Confetti Bomb", icon: "🎉", kind: "throw", proj: "bomb", unlock: 160 },
+    { id: "wreck", name: "Wrecking Ball", icon: "⚫", kind: "wreck", set: "both", unlock: 0 },
     // ---- Brutal mode (cartoon blood, always the cartoon face) ----
     { id: "knuckles", name: "Brass Knuckles", icon: "👊", kind: "melee", swing: "jab", power: 8, tc: 0.09, sound: "crunch", set: "brutal", unlock: 0 },
     { id: "bat", name: "Baseball Bat", icon: "⚾", kind: "melee", swing: "bat", power: 10, tc: 0.15, sound: "crunch", set: "brutal", unlock: 0, L: 1.0 },

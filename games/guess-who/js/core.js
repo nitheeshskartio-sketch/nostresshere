@@ -14,19 +14,32 @@
     { id: "cartoons", name: "Cartoon Characters", icon: "🐭", color: "#51cf66", ask: "Guess the Cartoon!" },
     { id: "anime", name: "Anime Characters", icon: "🍥", color: "#22b8cf", ask: "Guess the Anime Character!" },
     { id: "villains", name: "Villains", icon: "😈", color: "#868e96", ask: "Guess the Villain!" },
-    { id: "famous", name: "Famous Personalities", icon: "🌟", color: "#e599f7", ask: "Who is it?" }
+    { id: "famous", name: "Famous Personalities", icon: "🌟", color: "#e599f7", ask: "Who is it?" },
+    { id: "countries", name: "Countries of the World", icon: "🌍", color: "#20c997", ask: "Guess the Country!" },
+    { id: "culture", name: "World Culture", icon: "🗺️", color: "#fab005", ask: "Guess it!" }
   ];
-  G.SUBS = [];   // { cat, id, name, icon, items: [entry] }
+  G.SUBS = [];   // { cat, id, name, icon, ask?, items: [entry] }
   G.ALL = [];    // every entry
-  /* entry rows: [answer, "alias|alias", difficulty 1-3, explanation, "clue|clue|…"]
-     clues are written from vague to revealing */
-  G.add = function (cat, id, name, icon, rows) {
-    const sub = { cat, id, name, icon, items: [] };
+  G.DIFF = ["Easy", "Medium", "Hard", "Expert"];
+  /* entry rows: [answer, "alias|alias", difficulty 1-4, explanation, "clue|clue|…"]
+     clues are written from vague to revealing. Calling add() again with the same
+     cat + id appends to that subcategory; a repeated answer in one category is skipped. */
+  const seenAns = new Set();
+  G.add = function (cat, id, name, icon, rows, opts) {
+    let sub = G.SUBS.find((s) => s.cat === cat && s.id === id);
+    if (!sub) { sub = { cat, id, name, icon, items: [] }; G.SUBS.push(sub); }
+    if (opts && opts.ask) sub.ask = opts.ask;
+    const shared = opts && opts.shared; // subcategories that reuse answers from elsewhere (e.g. "guess the country by flag")
     for (const r of rows) {
-      const e = { id: cat + "/" + id + "/" + r[0], cat, sub: id, answer: r[0], aliases: r[1] ? r[1].split("|").map((s) => s.trim()).filter(Boolean) : [], diff: r[2], info: r[3], clues: r[4].split("|").map((s) => s.trim()) };
+      const key = cat + "|" + (shared ? id + "|" : "") + r[0].toLowerCase();
+      if (seenAns.has(key)) continue;
+      seenAns.add(key);
+      const clues = (Array.isArray(r[4]) ? r[4] : r[4].split("|")).map((s) => s.trim()).filter(Boolean);
+      if (clues.length < 3) continue;
+      const e = { id: cat + "/" + id + "/" + r[0], cat, sub: id, answer: r[0], aliases: r[1] ? r[1].split("|").map((s) => s.trim()).filter(Boolean) : [], diff: Math.max(1, Math.min(4, r[2] || 2)), info: r[3], clues };
       sub.items.push(e); G.ALL.push(e);
     }
-    G.SUBS.push(sub);
+    return sub;
   };
   G.subsOf = (cat) => G.SUBS.filter((s) => s.cat === cat);
   G.catById = (id) => G.CATS.find((c) => c.id === id);
@@ -87,8 +100,10 @@
     // the best fit among the *other* answers of the same kind (a movie question isn't blocked by a character's name)
     let other = 0, otherName = null;
     const tn = G.compact(target.answer);
+    // subcategories that ask their own kind of question (capital, currency, food…) only compete with themselves
+    const own = G.subById(target.cat, target.sub), solo = own && own.ask;
     for (const e of G.ALL) {
-      if (e === target || e.cat !== target.cat || G.compact(e.answer) === tn) continue;
+      if (e === target || e.cat !== target.cat || (solo && e.sub !== target.sub) || G.compact(e.answer) === tn) continue;
       const s = score(g, e, gr);
       if (s > other) { other = s; otherName = e.answer; }
     }

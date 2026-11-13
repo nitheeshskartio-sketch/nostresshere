@@ -1,0 +1,3 @@
+# ads.txt for No Stress Here
+# When AdSense is approved, replace this comment with the line AdSense gives you, e.g.:
+# google.com, pub-XXXXXXXXXXXXXXXX, DIRECT, f08c47fec0942fa0

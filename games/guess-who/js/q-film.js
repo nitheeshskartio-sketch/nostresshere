@@ -67,7 +67,7 @@
   ]);
   add("movchar", "starwars", "Star Wars", "🌌", [
     ["Luke Skywalker", "luke", 1, "The farm boy who became a Jedi Knight — played by Mark Hamill.", "A farm boy from the desert planet Tatooine|He destroyed the first Death Star|He lost his hand in a lightsaber duel|He trained with Yoda on Dagobah|Mark Hamill played him"],
-    ["Darth Vader", "vader|anakin skywalker|anakin|lord vader", 1, "Anakin Skywalker, the Jedi who fell to the dark side.", "Once a slave boy from Tatooine|He breathes through a black mechanical suit|'No, I am your father'|Apprentice to Emperor Palpatine|He was born Anakin Skywalker"],
+    ["Darth Vader", "vader|lord vader", 1, "Anakin Skywalker, the Jedi who fell to the dark side.", "Once a slave boy from Tatooine|He breathes through a black mechanical suit|'No, I am your father'|Apprentice to Emperor Palpatine|He was born Anakin Skywalker"],
     ["Princess Leia", "leia|leia organa|general leia", 1, "Leia Organa, rebel leader and Luke's twin — played by Carrie Fisher.", "A senator and leader of the Rebel Alliance|She hid secret plans inside a droid|'Help me, Obi-Wan Kenobi. You're my only hope'|Luke's twin sister|Carrie Fisher played her"],
     ["Han Solo", "han", 1, "The smuggler captain of the Millennium Falcon — played by Harrison Ford.", "A smuggler who made the Kessel Run in less than twelve parsecs|His ship is the Millennium Falcon|He was frozen in carbonite|His co-pilot is a Wookiee|Harrison Ford played him"],
     ["Yoda", "master yoda", 1, "The small green Jedi Master.", "A small, green Jedi Master|He lived in exile on Dagobah|He speaks with unusual word order|'Do. Or do not. There is no try.'|He lived for 900 years"],

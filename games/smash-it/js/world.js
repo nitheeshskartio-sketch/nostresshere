@@ -423,6 +423,7 @@
 
     /* ---------- per-frame ---------- */
     stepTime(rdt) {
+      if (this.forceScale != null) { this.timeScale = this.forceScale; return; }
       if (this.slowT > 0) {
         this.slowT -= rdt;
         this.timeScale = this.slowT > 0.25 ? 0.22 : 0.22 + (1 - this.slowT / 0.25) * 0.78;
@@ -468,6 +469,17 @@
 
     // one fixed, locked camera at the front of the room that sees the whole space
     updateCamera(rdt) {
+      // a cinematic (fatality mode) can take the camera for a while
+      if (this.camCtl) {
+        this.camCtl(this.camera, rdt);
+        if (this.shakeAmt > 0) {
+          const a = this.shakeAmt * 0.03;
+          this.camera.position.add(new V3(R(-a, a), R(-a, a), R(-a, a)));
+          this.camera.rotateZ(R(-a, a) * 0.3);
+          this.shakeAmt = Math.max(0, this.shakeAmt - rdt * 12);
+        }
+        return;
+      }
       const tall = this.camera.aspect < 0.8;
       this.camera.position.set(0, tall ? 3.8 : 2.6, tall ? 12.5 : 8.2);
       this.camLook.set(0, tall ? 1.2 : 1.05, -0.9);

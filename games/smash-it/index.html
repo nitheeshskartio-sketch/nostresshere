@@ -30,6 +30,7 @@
       <div class="hud-top">
         <div class="hud-left">
           <button class="mode-chip" id="modeBtn" type="button"><span id="modeIcon">🎈</span> <span id="modeName">Free Play</span> ▾</button>
+          <button class="fatal-btn" id="fatalBtn" type="button" title="Fatality Mode — cinematic finishing moves">💀 FATALITY</button>
           <div class="vio" role="group" aria-label="Normal or Brutal">
             <button type="button" id="vNormal" class="on" aria-pressed="true">😇 Normal</button>
             <button type="button" id="vBrutal" aria-pressed="false">😈 Brutal</button>
@@ -73,6 +74,7 @@
 
     <div class="modal" id="modal" hidden><div class="modal-card" id="modalCard"></div></div>
   </main>
+  <aside class="ad-slot game-ad" data-ad="game-bottom" aria-label="Advertisement" hidden></aside>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
@@ -84,6 +86,9 @@
   <script src="js/buddy.js"></script>
   <script src="js/tools.js"></script>
   <script src="js/brutal.js"></script>
+  <script src="js/arena.js"></script>
+  <script src="js/fatality.js"></script>
   <script src="js/game.js"></script>
+  <script src="../../assets/js/ads.js" defer></script>
 </body>
 </html>

@@ -145,18 +145,24 @@
     }
 
     build() {
-      this.root.clear();
+      this.root.clear(); this.tieG = null; this.torsoProf = null;
       this.mats = []; this.hitMeshes = []; this.outlines = []; this.decals = [];
       this.outlineMat = this.outlineMat || new THREE.MeshBasicMaterial({ color: 0x1a1a1a, side: THREE.BackSide });
       const O = S.OUTFITS[this.look.outfit];
+      // Realistic style = human proportions and features; Cartoon style = the big-headed toy
+      const real = (this.real = this.style !== "toon");
+      this.hs = real ? 0.6 : 1;               // head scale
+      this.face.realistic = real;
+      this.face.browColor = this.look.hair === "bald" ? "#3b2a20" : this.look.hairColor;
       const skin = this.mat(this.look.skin, { roughness: 0.55 });
+      if (real) skin.std = skin.cur = new THREE.MeshPhysicalMaterial({ color: this.look.skin, roughness: 0.5, sheen: 0.6, sheenRoughness: 0.55, sheenColor: new THREE.Color("#ff9d8a"), clearcoat: 0.08, clearcoatRoughness: 0.6 });
       const shirtMap = O.polka ? S.tex.polka(O.shirt, "#ff6b6b") : null;
       const shirt = this.mat(O.shirt, { roughness: 0.8, map: shirtMap });
       const pants = this.mat(O.pants, { roughness: 0.85 });
       const shoes = this.mat(O.shoes, { roughness: 0.45 });
       const hairM = this.mat(this.look.hairColor, { roughness: 0.75 });
       this.skinMat = skin;
-      this.faceMat = { std: new THREE.MeshStandardMaterial({ map: this.face.texture, roughness: 0.55 }), toon: new THREE.MeshToonMaterial({ map: this.face.texture, gradientMap: toonGrad }) };
+      this.faceMat = { std: real ? new THREE.MeshPhysicalMaterial({ map: this.face.texture, roughness: 0.5, sheen: 0.6, sheenRoughness: 0.55, sheenColor: new THREE.Color("#ff9d8a"), clearcoat: 0.08, clearcoatRoughness: 0.6 }) : new THREE.MeshStandardMaterial({ map: this.face.texture, roughness: 0.55 }), toon: new THREE.MeshToonMaterial({ map: this.face.texture, gradientMap: toonGrad }) };
       this.faceMat.cur = this.style === "toon" ? this.faceMat.toon : this.faceMat.std;
       this.mats.push(this.faceMat);
 
@@ -170,25 +176,46 @@
 
       // spine + torso
       const spineG = new THREE.Group(); spineG.position.y = 0.05; body.add(spineG);
-      const torso = this.mesh(cap(0.23, 0.3), shirt, "torso", spineG, [0, 0.3, 0]);
+      let torso;
+      if (real) {
+        // a human torso: narrow waist, fuller chest, sloping shoulders
+        const prof = [[0.001, -0.07], [0.17, -0.05], [0.19, 0.04], [0.182, 0.16], [0.198, 0.27], [0.228, 0.38], [0.24, 0.47], [0.225, 0.54], [0.17, 0.6], [0.09, 0.64], [0.001, 0.655]].map(([r, y]) => new THREE.Vector2(r, y));
+        this.torsoProf = prof;
+        torso = this.mesh(new THREE.LatheGeometry(prof, 32), shirt, "torso", spineG, [0, 0, 0]);
+        torso.scale.set(1.12, 1, 0.7);
+        this.mesh(new THREE.CylinderGeometry(0.058, 0.07, 0.2, 16), skin, "head", spineG, [0, 0.66, 0]);
+        // collar and belt
+        if (O.sleeves === "long" && !O.polka) { const col = this.mesh(new THREE.TorusGeometry(0.075, 0.018, 8, 24), shirt, null, spineG, [0, 0.615, 0.005]); col.rotation.x = Math.PI / 2 - 0.15; col.scale.set(1, 1.15, 1); }
+        if (!O.shorts) { const belt = this.mesh(new THREE.TorusGeometry(0.205, 0.022, 8, 32), this.mat("#2b2118", { roughness: 0.4 }), null, body, [0, 0.07, 0]); belt.rotation.x = Math.PI / 2; belt.scale.set(1.12, 0.72, 1); const buckle = this.mesh(new THREE.BoxGeometry(0.05, 0.035, 0.012), this.mat("#c9b26b", { roughness: 0.25, metalness: 0.8 }), null, body, [0, 0.07, 0.152]); buckle.castShadow = false; }
+      } else {
+        torso = this.mesh(cap(0.23, 0.3), shirt, "torso", spineG, [0, 0.3, 0]);
+        torso.scale.set(1.15, 1, 0.8);
+        this.mesh(new THREE.CylinderGeometry(0.075, 0.085, 0.14, 12), skin, "head", spineG, [0, 0.6, 0]);
+      }
       this.spineG = spineG; this.torsoMesh = torso;
-      torso.scale.set(1.15, 1, 0.8);
-      this.mesh(new THREE.CylinderGeometry(0.075, 0.085, 0.14, 12), skin, "head", spineG, [0, 0.6, 0]);
 
       // head
-      const headG = new THREE.Group(); headG.position.y = 0.64; spineG.add(headG);
-      const headIn = (this.headIn = new THREE.Group()); headIn.position.y = 0.27; headG.add(headIn);
+      const headG = new THREE.Group(); headG.position.y = real ? 0.74 : 0.64; spineG.add(headG);
+      const headIn = (this.headIn = new THREE.Group()); headIn.position.set(0, 0.27 * this.hs, real ? 0.012 : 0); headIn.scale.setScalar(this.hs); headG.add(headIn);
       const head = this.mesh(new THREE.SphereGeometry(0.28, 36, 24), skin, "head", headIn);
       this.headMesh = head; this.headG = headG;
       head.scale.y = 1.04;
+      if (real) { head.scale.set(0.92, 1.1, 1); const jaw = this.mesh(new THREE.SphereGeometry(0.2, 24, 16), skin, "head", headIn, [0, -0.11, 0.035]); jaw.scale.set(1.02, 0.9, 1.05); }
       const faceGeo = new THREE.SphereGeometry(0.2818, 48, 32, Math.PI / 2 - 1.0, 2.0, 0.5, 1.85);
       const face = new THREE.Mesh(faceGeo, this.faceMat.cur);
       face.userData = { part: "head", face: true, mat: this.faceMat };
       face.scale.y = 1.04;
+      if (real) face.scale.set(0.92, 1.1, 1);
       face.castShadow = false; face.receiveShadow = true;
       headIn.add(face); this.hitMeshes.push(face); this.faceMesh = face;
       for (const s of [-1, 1]) { const ear = this.mesh(new THREE.SphereGeometry(0.06, 12, 10), skin, "head", headIn, [s * 0.275, 0.0, -0.01]); ear.scale.set(0.5, 1, 0.8); }
-      this.nose = this.mesh(new THREE.SphereGeometry(0.042, 14, 10), skin, "head", headIn, [0, 0.0, 0.285]);
+      if (real) {
+        // a nose with a bridge, a rounded tip and nostril wings
+        const ng = (this.nose = new THREE.Group()); ng.position.set(0, 0.0, 0.255); headIn.add(ng);
+        const br = this.mesh(new THREE.CapsuleGeometry(0.016, 0.075, 4, 10), skin, "head", ng, [0, 0.045, 0.008]); br.rotation.x = -0.36; br.scale.set(1.15, 1, 0.9);
+        const tip = this.mesh(new THREE.SphereGeometry(0.026, 16, 12), skin, "head", ng, [0, -0.006, 0.026]); tip.scale.set(1.05, 0.9, 1);
+        for (const s of [-1, 1]) { const w = this.mesh(new THREE.SphereGeometry(0.017, 12, 10), skin, "head", ng, [s * 0.022, -0.016, 0.012]); w.scale.set(0.9, 0.75, 1); }
+      } else this.nose = this.mesh(new THREE.SphereGeometry(0.042, 14, 10), skin, "head", headIn, [0, 0.0, 0.285]);
       this.nose.visible = !this.face.hasPhoto;
       const nHair = this.hitMeshes.length;
       this.buildHair(headIn, hairM, O);
@@ -206,12 +233,30 @@
       // arms
       const sleeveU = O.sleeves === "none" ? skin : shirt, sleeveF = O.sleeves === "long" ? shirt : skin;
       const arm = (s) => {
-        const sh = new THREE.Group(); sh.position.set(s * 0.31, 0.5, 0); spineG.add(sh);
-        this.mesh(cap(0.075, 0.22), sleeveU, "arm", sh, [0, -0.17, 0]);
+        const sh = new THREE.Group(); sh.position.set(s * (real ? 0.3 : 0.31), real ? 0.5 : 0.5, 0); spineG.add(sh);
+        if (real) {
+          const ua = this.mesh(cap(0.066, 0.24), sleeveU, "arm", sh, [0, -0.18, 0]); ua.scale.set(1, 1, 0.92);
+          this.mesh(new THREE.SphereGeometry(0.078, 16, 12), sleeveU, "arm", sh, [0, -0.02, 0]); // shoulder
+        } else this.mesh(cap(0.075, 0.22), sleeveU, "arm", sh, [0, -0.17, 0]);
         const el = new THREE.Group(); el.position.y = -0.36; sh.add(el);
-        this.mesh(cap(0.067, 0.2), sleeveF, "arm", el, [0, -0.15, 0]);
-        const hand = this.mesh(new THREE.SphereGeometry(0.085, 16, 12), skin, "arm", el, [0, -0.33, 0]);
-        hand.scale.set(1, 1.1, 0.8);
+        if (real) {
+          const fa = this.mesh(new THREE.CylinderGeometry(0.058, 0.042, 0.3, 14), sleeveF, "arm", el, [0, -0.15, 0]); fa.scale.z = 0.85;
+          this.mesh(new THREE.SphereGeometry(0.058, 12, 10), sleeveF, "arm", el, [0, 0, 0]); // elbow
+          // hand: palm, four fingers and a thumb (palm faces the body)
+          const hg = new THREE.Group(); hg.position.y = -0.32; el.add(hg);
+          const wr = this.mesh(new THREE.CylinderGeometry(0.036, 0.04, 0.04, 12), skin, "arm", hg, [0, 0.005, 0]); wr.scale.z = 0.8;
+          const palm = this.mesh(new THREE.CapsuleGeometry(0.03, 0.04, 6, 12), skin, "arm", hg, [0, -0.052, 0]); palm.scale.set(0.82, 1, 1.28);
+          for (let f = 0; f < 4; f++) {
+            const len = [0.04, 0.048, 0.045, 0.034][f];
+            const fg = this.mesh(new THREE.CapsuleGeometry(0.0115, len, 4, 8), skin, "arm", hg, [s * 0.006, -0.092 - len * 0.5, -0.027 + f * 0.018]);
+            fg.rotation.z = -s * 0.22; fg.rotation.x = (f - 1.5) * 0.05;
+          }
+          const th = this.mesh(new THREE.CapsuleGeometry(0.013, 0.038, 4, 8), skin, "arm", hg, [s * -0.008, -0.045, 0.045]); th.rotation.x = -0.55; th.rotation.z = -s * 0.25;
+        } else {
+          this.mesh(cap(0.067, 0.2), sleeveF, "arm", el, [0, -0.15, 0]);
+          const hand = this.mesh(new THREE.SphereGeometry(0.085, 16, 12), skin, "arm", el, [0, -0.33, 0]);
+          hand.scale.set(1, 1.1, 0.8);
+        }
         return [sh, el];
       };
       const [shL, elL] = arm(1), [shR, elR] = arm(-1);
@@ -219,12 +264,22 @@
       // legs
       const leg = (s) => {
         const hp = new THREE.Group(); hp.position.set(s * 0.13, -0.06, 0); body.add(hp);
-        this.mesh(cap(0.1, 0.26), pants, "leg", hp, [0, -0.22, 0]);
         const kn = new THREE.Group(); kn.position.y = -0.45; hp.add(kn);
-        this.mesh(cap(0.085, 0.26), O.shorts ? skin : pants, "leg", kn, [0, -0.2, 0]);
-        const shoe = this.mesh(new THREE.SphereGeometry(1, 18, 12), shoes, "leg", kn, [0, -0.45, 0.05]);
         const big = O.bigShoes ? 1.45 : 1;
-        shoe.scale.set(0.1 * big, 0.075, 0.16 * big);
+        if (real) {
+          const th = this.mesh(new THREE.CylinderGeometry(0.1, 0.075, 0.46, 16), pants, "leg", hp, [0, -0.22, 0]); th.scale.z = 0.92;
+          this.mesh(new THREE.SphereGeometry(0.078, 12, 10), O.shorts ? skin : pants, "leg", kn, [0, 0, 0]); // knee
+          const shin = this.mesh(new THREE.CylinderGeometry(0.072, 0.05, 0.42, 14), O.shorts ? skin : pants, "leg", kn, [0, -0.21, 0]); shin.scale.z = 0.95;
+          // shoe: rounded upper on a flat sole
+          const up = this.mesh(new THREE.SphereGeometry(1, 20, 14), shoes, "leg", kn, [0, -0.47, 0.045]); up.scale.set(0.068 * big, 0.052, 0.14 * big);
+          const heel = this.mesh(new THREE.SphereGeometry(1, 14, 10), shoes, "leg", kn, [0, -0.47, -0.04]); heel.scale.set(0.06, 0.05, 0.06);
+          const sole = this.mesh(new THREE.CylinderGeometry(1, 1, 1, 24), this.mat(O.shoes === "#f8f9fa" ? "#dee2e6" : "#1a1a1a", { roughness: 0.8 }), "leg", kn, [0, -0.513, 0.03]); sole.scale.set(0.066 * big, 0.022, 0.15 * big);
+        } else {
+          this.mesh(cap(0.1, 0.26), pants, "leg", hp, [0, -0.22, 0]);
+          this.mesh(cap(0.085, 0.26), O.shorts ? skin : pants, "leg", kn, [0, -0.2, 0]);
+          const shoe = this.mesh(new THREE.SphereGeometry(1, 18, 12), shoes, "leg", kn, [0, -0.45, 0.05]);
+          shoe.scale.set(0.1 * big, 0.075, 0.16 * big);
+        }
         return [hp, kn];
       };
       const [hipL, knL] = leg(1), [hipR, knR] = leg(-1);
@@ -262,7 +317,9 @@
 
       if (O.acc === "tie") {
         const tm = this.mat(O.accColor, { roughness: 0.5 });
-        const knot = new THREE.Group(); knot.position.set(0, 0.52, 0.195); spineG.add(knot);
+        const knot = new THREE.Group(); knot.position.set(0, real ? 0.585 : 0.52, real ? 0.115 : 0.195); spineG.add(knot);
+        if (real) knot.rotation.x = -0.32;
+        this.tieG = knot;
         this.mesh(new THREE.BoxGeometry(0.07, 0.06, 0.03), tm, null, knot);
         let parent = knot;
         for (let i = 0; i < 2; i++) {
@@ -350,7 +407,9 @@
     }
 
     setStyle(style) {
+      const wasReal = this.real;
       this.style = style;
+      if (wasReal !== undefined && wasReal !== (style !== "toon")) { this.build(); this.face.dirty = true; return; }
       for (const m of this.mats) { m.cur = style === "toon" ? m.toon : m.std; }
       this.root.traverse((o) => { if (o.isMesh && o.userData.mat) o.material = o.userData.mat.cur; });
       for (const o of this.outlines) o.visible = style === "toon";
@@ -359,6 +418,7 @@
     setLook(patch) {
       Object.assign(this.look, patch);
       if (patch.skin) this.face.setSkin(patch.skin);
+      this.face.dirty = true;
       this.build();
     }
 
@@ -412,7 +472,7 @@
     /* ---------- approximate hit test (for water drops) ---------- */
     approxHit(p) {
       const h = this.headPos();
-      if (p.distanceTo(h) < 0.33) return "head";
+      if (p.distanceTo(h) < 0.33 * (this.hs || 1)) return "head";
       const l = p.clone().sub(this.com).applyQuaternion(this.invQuat());
       const seg = (a, b, r) => { const t = clamp(l.y < a ? 0 : l.y > b ? 1 : (l.y - a) / (b - a), 0, 1); const y = a + (b - a) * t; return Math.hypot(l.x, l.y - y, l.z) < r; };
       if (seg(-0.05, 0.6, 0.3)) return "torso";
@@ -505,28 +565,106 @@
       }
     }
     organMat(color) { return this.mat(color, { roughness: 0.3, metalness: 0.05 }).cur; }
+    // wet, glossy tissue (cartoon style keeps the flat toon look)
+    wetMat(color, o) {
+      if (!this.real) return this.organMat(color);
+      return new THREE.MeshPhysicalMaterial(Object.assign({ color, roughness: 0.34, clearcoat: 1, clearcoatRoughness: 0.12, sheen: 0.35, sheenColor: new THREE.Color("#ffb3b3") }, o || {}));
+    }
+    // lumpy version of a sphere so organs aren't perfectly round
+    lumpy(r, amt, seed, ws, hs) {
+      const geo = new THREE.SphereGeometry(r, ws || 24, hs || 18), pa = geo.attributes.position;
+      for (let i = 0; i < pa.count; i++) {
+        const v = new V3().fromBufferAttribute(pa, i);
+        const n = Math.sin(v.x * 37 + seed) * Math.cos(v.y * 41 + seed * 2) * Math.sin(v.z * 33 + seed * 3);
+        v.multiplyScalar(1 + n * amt); pa.setXYZ(i, v.x, v.y, v.z);
+      }
+      geo.computeVertexNormals();
+      return geo;
+    }
+    mottled(base, spot) {
+      const key = base + spot; this._mot = this._mot || {};
+      if (this._mot[key]) return this._mot[key];
+      const c = document.createElement("canvas"); c.width = c.height = 128; const x = c.getContext("2d");
+      x.fillStyle = base; x.fillRect(0, 0, 128, 128);
+      for (let i = 0; i < 260; i++) { x.fillStyle = spot; x.globalAlpha = R(0.08, 0.35); x.beginPath(); x.arc(R(0, 128), R(0, 128), R(1, 5), 0, 7); x.fill(); }
+      x.globalAlpha = 0.35; x.strokeStyle = "#7a2030"; x.lineWidth = 0.8;
+      for (let i = 0; i < 18; i++) { x.beginPath(); let px = R(0, 128), py = R(0, 128); x.moveTo(px, py); for (let k = 0; k < 6; k++) { px += R(-12, 12); py += R(-12, 12); x.lineTo(px, py); } x.stroke(); }
+      const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      return (this._mot[key] = t);
+    }
+    tube(pts, r, mat, segs, radial) { return new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), segs || 40, r, radial || 8), mat); }
     openChest(dir) {
       if (this.chestOpen) return;
       this.chestOpen = true;
       const g = new THREE.Group(); this.spineG.add(g); this.chestG = g;
-      const add = (geo, color, pos, scl) => { const m = new THREE.Mesh(geo, this.organMat(color)); m.position.set(pos[0], pos[1], pos[2]); if (scl) m.scale.set(scl[0], scl[1], scl[2]); m.castShadow = true; g.add(m); return m; };
-      add(new THREE.SphereGeometry(0.2, 20, 14), "#4a0510", [0, 0.3, 0.165], [1.05, 1.25, 0.3]);
-      // ribs
-      for (let i = 0; i < 4; i++) {
-        const y = 0.36 + i * 0.045;
-        const pts = []; for (let k = 0; k <= 8; k++) { const t = -1.05 + (k / 8) * 2.1; pts.push(new V3(Math.sin(t) * 0.15, y - Math.abs(t) * 0.02, Math.cos(t) * 0.07 + 0.13)); }
-        add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 16, 0.011, 6), "#f1e3c8", [0, 0, 0]);
+      if (this.tieG && this.tieG.parent) { const tp = this.tieG.getWorldPosition(new V3()); this.makeGib(this.tieG, tp, this.tieG.getWorldQuaternion(new Q()), new V3(R(-1, 1), 2, 2), 0.06, 0.01); this.tieG = null; }
+      if (this.real && this.torsoProf) {
+        // cut a hole in the front of the torso: open shell, raw flesh inside, ragged edges
+        const T = this.torsoMesh, gap = 0.95;
+        T.geometry = new THREE.LatheGeometry(this.torsoProf.slice(1, 9), 32, gap, Math.PI * 2 - gap * 2);
+        if (T.material.side !== THREE.DoubleSide) { T.material = T.material.clone(); T.material.side = THREE.DoubleSide; }
+        const inner = new THREE.Mesh(new THREE.LatheGeometry(this.torsoProf.slice(1, 9).map((v) => new THREE.Vector2(v.x * 0.94, v.y)), 32, gap, Math.PI * 2 - gap * 2), this.wetMat("#7a0f17", { side: THREE.BackSide, roughness: 0.45 }));
+        T.add(inner);
+        for (const sd of [-1, 1]) {
+          const edge = this.torsoProf.slice(1, 9).map((v) => new V3(Math.sin(sd * gap) * v.x, v.y, Math.cos(gap) * v.x));
+          const e = this.tube(edge, 0.016, this.wetMat("#a3202b"), 30, 6); T.add(e);
+        }
+        g.position.z = -0.012;
+      } else g.position.z = 0.07; // cartoon body: organs bulge out of the tummy
+      const place = (m, pos, scl) => { m.position.set(pos[0], pos[1], pos[2]); if (scl) m.scale.set(scl[0], scl[1], scl[2]); m.traverse((o) => { if (o.isMesh) o.castShadow = true; }); g.add(m); return m; };
+      // the open cavity, with a glossy pool of blood at the bottom
+      place(new THREE.Mesh(new THREE.SphereGeometry(0.2, 24, 16), this.wetMat("#3d0409", { roughness: 0.5, side: THREE.BackSide })), [0, 0.3, 0.06], [1.0, 1.35, 0.55]);
+      place(new THREE.Mesh(new THREE.CircleGeometry(0.15, 24), this.wetMat("#5a0008", { roughness: 0.05 })), [0, 0.08, 0.12], [1.2, 1, 1]).rotation.x = -Math.PI / 2 + 0.3;
+      const bone = this.real ? new THREE.MeshPhysicalMaterial({ color: "#efe3c8", roughness: 0.45, clearcoat: 0.6, clearcoatRoughness: 0.3 }) : this.organMat("#f1e3c8");
+      // ribcage: seven ribs a side curving round from the spine to the sternum, plus the sternum
+      const cage = new THREE.Group();
+      for (let i = 0; i < 7; i++) for (const sd of [-1, 1]) {
+        const y = 0.53 - i * 0.042, len = i < 5 ? 1 : 0.8, pts = [];
+        for (let k = 0; k <= 10; k++) { const a = 0.18 + (k / 10) * 2.6 * len; pts.push(new V3(sd * Math.sin(a) * (0.19 + i * 0.006), y - (1 - Math.cos(a)) * 0.035, Math.cos(a) * 0.15 + 0.01)); }
+        cage.add(this.tube(pts, 0.0095, bone, 24, 6));
+        if (i < 6) { const cart = this.tube([pts[0], new V3(sd * 0.02, y - 0.005, 0.165)], 0.008, this.wetMat("#e9ddc9", { clearcoat: 0.5 }), 6, 6); cage.add(cart); }
       }
-      const lungL = add(new THREE.SphereGeometry(0.075, 16, 12), "#e58f9a", [0.09, 0.42, 0.15], [0.85, 1.25, 0.55]);
-      const lungR = add(new THREE.SphereGeometry(0.075, 16, 12), "#e58f9a", [-0.09, 0.42, 0.15], [0.85, 1.25, 0.55]);
-      const heart = new THREE.Group(); heart.position.set(0.035, 0.38, 0.19); g.add(heart);
-      const red = this.organMat("#b5172b");
-      for (const s of [-1, 1]) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.035, 12, 10), red); b.position.set(s * 0.022, 0.012, 0); heart.add(b); }
-      const tipM = new THREE.Mesh(new THREE.ConeGeometry(0.048, 0.07, 12), red); tipM.rotation.z = Math.PI; tipM.position.y = -0.03; heart.add(tipM);
+      const stern = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.24, 0.012), bone); stern.position.set(0, 0.43, 0.168); cage.add(stern);
+      place(cage, [0, 0, 0]);
+      // lungs: lobed, spongy and mottled
+      const lungMat = this.real ? this.wetMat("#d9959a", { map: this.mottled("#d9959a", "#6b3a44"), roughness: 0.55, clearcoat: 0.5 }) : this.organMat("#e58f9a");
+      const lung = (sd, lobes) => {
+        const L = new THREE.Group();
+        for (let i = 0; i < lobes; i++) { const m = new THREE.Mesh(this.lumpy(0.06, 0.05, i + sd * 3), lungMat); m.position.set(sd * (i === 1 ? 0.012 : 0), 0.05 - i * (0.1 / lobes) * 1.4, -i * 0.006); m.scale.set(0.95, 1.05, 0.7); L.add(m); }
+        return L;
+      };
+      const lungL = place(lung(1, 2), [0.095, 0.42, 0.11], [1, 1.15, 1]);
+      const lungR = place(lung(-1, 3), [-0.095, 0.42, 0.11], [1.05, 1.15, 1]);
+      // heart: tapered muscle with fat streaks, aorta arch and great vessels
+      const heart = new THREE.Group(); heart.position.set(0.03, 0.375, 0.155); g.add(heart);
+      const hg = this.lumpy(0.045, 0.03, 7, 28, 20), hp = hg.attributes.position;
+      for (let i = 0; i < hp.count; i++) { const v = new V3().fromBufferAttribute(hp, i); if (v.y < 0) { const k = 1 + v.y * 9; v.x *= k; v.z *= k; v.y *= 1.35; } hp.setXYZ(i, v.x, v.y, v.z); }
+      hg.computeVertexNormals();
+      const muscle = new THREE.Mesh(hg, this.real ? this.wetMat("#8f1d24", { map: this.mottled("#8f1d24", "#e6c27a") }) : this.organMat("#b5172b"));
+      muscle.rotation.z = -0.45; heart.add(muscle);
+      const art = this.wetMat("#b52a35"), vein = this.wetMat("#4b4f9a");
+      heart.add(this.tube([new V3(0.005, 0.035, 0), new V3(0.01, 0.075, -0.005), new V3(-0.015, 0.095, -0.02), new V3(-0.04, 0.08, -0.03), new V3(-0.045, 0.03, -0.035)], 0.012, art, 24));
+      heart.add(this.tube([new V3(0.02, 0.03, 0.01), new V3(0.035, 0.07, 0.0), new V3(0.06, 0.08, -0.02)], 0.01, vein, 16));
+      heart.add(this.tube([new V3(-0.025, 0.03, 0), new V3(-0.03, 0.09, -0.005)], 0.009, vein, 10));
+      for (const a of [0.4, 1.4, 2.3]) heart.add(this.tube([new V3(Math.cos(a) * 0.04, 0.02, Math.sin(a) * 0.04 + 0.005), new V3(Math.cos(a + 0.3) * 0.036, -0.02, Math.sin(a + 0.3) * 0.036 + 0.01), new V3(Math.cos(a + 0.5) * 0.02, -0.06, Math.sin(a + 0.5) * 0.02 + 0.01)], 0.0025, this.wetMat("#5a1018"), 10, 5));
       this.heart = heart;
-      const pts = []; for (let r = 0; r < 4; r++) for (let k = 0; k <= 6; k++) { const x = (r % 2 ? 1 - k / 6 : k / 6) * 0.26 - 0.13; pts.push(new V3(x, 0.24 - r * 0.045 + Math.sin(k * 1.7) * 0.01, 0.19 + Math.sin(k + r) * 0.012)); }
-      const guts = add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 90, 0.026, 8), "#e9a3a9", [0, 0, 0]);
-      this.organs = [guts, heart, lungL, lungR];
+      // liver (right side), stomach (left side)
+      const liver = place(new THREE.Mesh(this.lumpy(0.09, 0.03, 11), this.real ? this.wetMat("#5e1414", { roughness: 0.25 }) : this.organMat("#6b1d1d")), [-0.07, 0.24, 0.12], [1.35, 0.6, 0.65]);
+      liver.rotation.z = -0.25;
+      const stomach = place(this.tube([new V3(0.03, 0.31, 0.11), new V3(0.09, 0.29, 0.13), new V3(0.12, 0.24, 0.13), new V3(0.1, 0.19, 0.13), new V3(0.05, 0.19, 0.14), new V3(0.01, 0.21, 0.14)], 0.032, this.real ? this.wetMat("#d6998c", { map: this.mottled("#d6998c", "#a85f58") }) : this.organMat("#d99a8a"), 30, 12), [0, 0, 0]);
+      // small intestine: a tight coil of tube in the belly
+      const sm = []; let px = 0, py = 0.11;
+      for (let k = 0; k < 46; k++) { const a = k * 1.9; px = Math.sin(a) * 0.085 * (0.6 + 0.4 * Math.sin(k * 0.37)); py = 0.15 - (k / 46) * 0.12 + Math.cos(a) * 0.022; sm.push(new V3(px, py, 0.13 + Math.sin(k * 0.8) * 0.018)); }
+      const smallInt = place(this.tube(sm, 0.017, this.real ? this.wetMat("#e3a59d", { map: this.mottled("#e3a59d", "#b0645e") }) : this.organMat("#e9a3a9"), 220, 8), [0, 0, 0]);
+      // large intestine framing it (bulging segments)
+      const colPts = [new V3(-0.12, 0.02, 0.12), new V3(-0.13, 0.12, 0.12), new V3(-0.1, 0.18, 0.12), new V3(0, 0.185, 0.125), new V3(0.1, 0.18, 0.12), new V3(0.13, 0.11, 0.12), new V3(0.11, 0.03, 0.12), new V3(0.05, 0.0, 0.12)];
+      const colon = new THREE.Group();
+      const colMat = this.real ? this.wetMat("#c08a7a", { map: this.mottled("#c08a7a", "#8a5048") }) : this.organMat("#c98f7f");
+      const cc = new THREE.CatmullRomCurve3(colPts);
+      colon.add(new THREE.Mesh(new THREE.TubeGeometry(cc, 60, 0.022, 8), colMat));
+      for (let k = 0; k <= 22; k++) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.028, 10, 8), colMat); b.position.copy(cc.getPoint(k / 22)); colon.add(b); }
+      place(colon, [0, 0, 0]);
+      this.organs = [smallInt, stomach, colon, liver, heart, lungL, lungR];
       const p = this.torsoMesh.getWorldPosition(new V3());
       this.world.splash(p, "#9b0000", 40, 4, 0.03); this.world.bloodSpray(p, 10, 3);
       S.audio.play("crunch", 14); S.audio.play("splat");
@@ -558,17 +696,30 @@
       this.faceMesh.geometry = fg;
       const inside = new THREE.Mesh(new THREE.SphereGeometry(0.262, 24, 16), new THREE.MeshStandardMaterial({ color: "#5a0a10", side: THREE.BackSide, roughness: 0.4 })); hi.add(inside);
       const rim = new THREE.Mesh(new THREE.TorusGeometry(0.28 * Math.sin(cut), 0.016, 8, 32), this.organMat("#8a1520")); rim.rotation.x = Math.PI / 2; rim.position.y = 0.28 * Math.cos(cut) * 1.04; hi.add(rim);
-      const bg = new THREE.IcosahedronGeometry(0.2, 3), bp = bg.attributes.position;
-      for (let i = 0; i < bp.count; i++) { const v = new V3().fromBufferAttribute(bp, i); v.multiplyScalar(1 + Math.sin(v.x * 60) * Math.cos(v.z * 55) * 0.05 + Math.sin(v.y * 70) * 0.03); bp.setXYZ(i, v.x, v.y, v.z); }
-      bg.computeVertexNormals();
-      const brain = new THREE.Mesh(bg, this.organMat("#f4a3b6")); brain.scale.set(1.05, 0.75, 1.15); brain.position.y = 0.12; brain.castShadow = true;
+      const brain = new THREE.Group();
+      const brainMat = this.real ? this.wetMat("#e3b2b4", { map: this.mottled("#e3b2b4", "#b8707a"), roughness: 0.4 }) : this.organMat("#f4a3b6");
+      for (const sd of [-1, 1]) {
+        const hgeo = new THREE.SphereGeometry(0.1, 48, 36), hpa = hgeo.attributes.position;
+        for (let i = 0; i < hpa.count; i++) {
+          const v = new V3().fromBufferAttribute(hpa, i);
+          // folds (gyri) from overlapping ridged waves
+          const f = Math.abs(Math.sin(v.x * 160 + Math.sin(v.y * 90) * 2)) * 0.5 + Math.abs(Math.sin(v.z * 150 + Math.cos(v.x * 80) * 2)) * 0.5;
+          v.multiplyScalar(1 + f * 0.06 - 0.03); if (v.x * sd < 0) v.x *= 0.35;
+          hpa.setXYZ(i, v.x, v.y, v.z);
+        }
+        hgeo.computeVertexNormals();
+        const h = new THREE.Mesh(hgeo, brainMat); h.position.x = sd * 0.052; h.scale.set(1, 0.85, 1.35); h.castShadow = true; brain.add(h);
+      }
+      const cb = new THREE.Mesh(this.lumpy(0.06, 0.08, 4), brainMat); cb.position.set(0, -0.06, -0.1); cb.scale.set(1.5, 0.7, 0.8); brain.add(cb);
+      brain.position.y = 0.11;
       hi.add(brain); this.brain = brain;
       // the top of the skull flies off
       const capG = new THREE.Group();
       const capM = new THREE.Mesh(new THREE.SphereGeometry(0.282, 24, 10, 0, Math.PI * 2, 0, cut), this.mat(this.look.hair === "bald" ? this.look.skin : this.look.hairColor, { side: THREE.DoubleSide }).cur);
       capG.add(capM);
       const pos = hi.getWorldPosition(new V3()).add(new V3(0, 0.2, 0));
-      this.makeGib(capG, pos, hi.getWorldQuaternion(new Q()), new V3(R(-1.5, 1.5), 4.5, R(-1, 1)).add((dir || new V3()).clone().multiplyScalar(2)), 0.14, 2);
+      capG.scale.setScalar(this.hs);
+      this.makeGib(capG, pos, hi.getWorldQuaternion(new Q()), new V3(R(-1.5, 1.5), 4.5, R(-1, 1)).add((dir || new V3()).clone().multiplyScalar(2)), 0.14 * this.hs, 2);
       W.splash(pos, "#9b0000", 30, 3.5, 0.03); W.bloodSpray(pos, 8, 3);
       S.audio.play("crunch", 14);
       this.react("dizzy", 2.5, pick(["My head feels… drafty.", "Is my brain showing?", "Ow! My thinking!"]));
@@ -576,7 +727,8 @@
     popBrain(dir) {
       const b = this.brain;
       const pos = b.getWorldPosition(new V3()), q = b.getWorldQuaternion(new Q());
-      this.makeGib(b, pos, q, new V3(R(-1, 1), 4, R(-1, 1)).add((dir || new V3()).clone().multiplyScalar(-1.5)), 0.15, 3);
+      b.scale.multiplyScalar(this.hs || 1);
+      this.makeGib(b, pos, q, new V3(R(-1, 1), 4, R(-1, 1)).add((dir || new V3()).clone().multiplyScalar(-1.5)), 0.15 * (this.hs || 1), 3);
       this.brain = null;
       this.world.splash(pos, "#9b0000", 25, 3, 0.03);
       S.audio.play("splat");
@@ -612,7 +764,7 @@
       if (this.brain) this.popBrain(out(this.headIn).multiplyScalar(-2));
       // head and torso chunks
       const hp = this.headG.getWorldPosition(new V3()), hq = this.headG.getWorldQuaternion(new Q());
-      this.makeGib(this.headG, hp, hq, out(this.headG).multiplyScalar(7).add(new V3(0, 4, 0)), 0.28, 3);
+      this.makeGib(this.headG, hp, hq, out(this.headG).multiplyScalar(7).add(new V3(0, 4, 0)), 0.28 * this.hs, 3);
       const cols = [S.OUTFITS[this.look.outfit].shirt, S.OUTFITS[this.look.outfit].pants, "#8a1520", "#6a0d18", this.look.skin];
       const c = this.com.clone();
       for (let i = 0; i < 9; i++) {
@@ -964,7 +1116,7 @@
       if (this.dizzy > 0) { L.vx += Math.sin(this.stateT * 3.1) * dt * 1.2; L.vz += Math.cos(this.stateT * 2.3) * dt * 1.4; }
 
       // walk back home when calm
-      const home = new V3(0, 0, 0);
+      const home = this.home ? this.home.clone() : new V3(0, 0, 0);
       const toHome = home.clone().sub(this.feet); toHome.y = 0;
       this.walking = false; this.panic = false;
       let targetYaw = this.yawToCamera();
@@ -1029,7 +1181,7 @@
               S.audio.play("wall"); this.world.shake(Math.min(8, sp * 0.7));
               this.world.puff(this.com.clone(), 8, "#cfc8bc");
               this.react("ko", 1.2, "hurt");
-              S.bus.emit("wall", { speed: sp });
+              S.bus.emit("wall", { speed: sp, axis, sign });
               if (sp > 9) this.world.slowmo(0.5);
             }
           }
@@ -1145,6 +1297,7 @@
       const J = this.j, t = this.stateT, T = performance.now() / 1000;
       let name = "idle";
       if (this.state === "fly" || this.state === "grabbed" || this.state === "shake") name = "flail";
+      else if (this.state === "machine") name = this.machinePose || "flail";
       else if (this.state === "down") name = "down";
       else if (this.state === "getup") name = "idle";
       else if (this.walking) name = "walk";
@@ -1184,6 +1337,14 @@
           J.neck.set(-0.25, 0, Math.sin(f * 0.5) * 0.2);
           break;
         }
+        case "up":
+          sym("shL", "shR", 0, 0, 2.9); sym("elL", "elR", -0.1, 0, 0); sym("hipL", "hipR", 0, 0, 0.05);
+          J.neck.set(-0.3, 0, Math.sin(T * 9) * 0.15);
+          break;
+        case "spread":
+          sym("shL", "shR", 0, 0, 1.45); sym("elL", "elR", -0.05, 0, 0); sym("hipL", "hipR", 0, 0, 0.45); sym("knL", "knR", 0.05, 0, 0);
+          J.neck.set(0, 0, 0);
+          break;
         case "down":
           sym("shL", "shR", 0, 0, 1.25); sym("elL", "elR", -0.3, 0, 0);
           sym("hipL", "hipR", 0.05, 0, 0.25); sym("knL", "knR", 0.2, 0, 0);

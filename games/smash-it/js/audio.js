@@ -119,7 +119,34 @@
     clank() { tone(420, 0.25, { type: "triangle", vol: 0.25 }); tone(780, 0.2, { vol: 0.12 }); SFX.thud(3); },
     steam() { noise(0.7, { filter: "highpass", freq: 2500, vol: 0.4, attack: 0.02 }); },
     slice() { noise(0.18, { filter: "highpass", freq: 2500, slide: 7000, vol: 0.5, attack: 0.01 }); tone(1800, 0.12, { type: "triangle", slide: 900, vol: 0.06 }); noise(0.1, { filter: "lowpass", freq: 600, vol: 0.4, delay: 0.05 }); },
-    comfy() { noise(0.4, { filter: "lowpass", freq: 500, vol: 0.5, attack: 0.04 }); }
+    comfy() { noise(0.4, { filter: "lowpass", freq: 500, vol: 0.5, attack: 0.04 }); },
+    /* ---- fatality mode ---- */
+    thunder() { noise(0.08, { filter: "highpass", freq: 1500, vol: 1, attack: 0.001 }); noise(2.2, { brown: true, filter: "lowpass", freq: 600, slide: 80, vol: 1, attack: 0.02, delay: 0.05 }); tone(50, 1.6, { slide: 30, vol: 0.7, delay: 0.05 }); },
+    rumble() { noise(2.5, { brown: true, filter: "lowpass", freq: 260, vol: 0.9, attack: 0.4 }); tone(40, 2.4, { vol: 0.5, attack: 0.4 }); },
+    gong() { tone(110, 3, { vol: 0.5, attack: 0.01 }); tone(164, 2.6, { vol: 0.3 }); tone(233, 2, { type: "triangle", vol: 0.15 }); tone(347, 1.5, { vol: 0.1 }); noise(0.3, { filter: "lowpass", freq: 800, vol: 0.4 }); },
+    charge() { tone(120, 1.4, { type: "sawtooth", slide: 1400, vol: 0.12, lp: 2400, attack: 0.2 }); tone(240, 1.4, { slide: 2600, vol: 0.08, attack: 0.2 }); },
+    laser() { tone(1800, 0.35, { type: "square", slide: 300, vol: 0.08, lp: 3500 }); },
+    zap() { noise(0.25, { filter: "highpass", freq: 4000, vol: 0.6 }); tone(R(700, 1100), 0.2, { type: "sawtooth", slide: 120, vol: 0.12, lp: 3000 }); },
+    roar() { noise(1.6, { brown: true, filter: "bandpass", freq: 300, q: 0.8, vol: 1, attack: 0.15 }); tone(70, 1.5, { type: "sawtooth", slide: 45, wobble: 9, vol: 0.25, lp: 500, attack: 0.15 }); },
+    fire() { noise(1.4, { brown: true, filter: "lowpass", freq: 900, vol: 0.9, attack: 0.1 }); noise(1.2, { filter: "bandpass", freq: 2500, vol: 0.15, attack: 0.2 }); },
+    freeze() { for (let i = 0; i < 10; i++) tone(R(2500, 5200), 0.25, { type: "triangle", vol: 0.06, delay: i * 0.06 }); noise(0.8, { filter: "highpass", freq: 5000, vol: 0.25, attack: 0.1 }); },
+    siren() { for (let i = 0; i < 3; i++) tone(500, 0.45, { type: "square", slide: 900, vol: 0.06, lp: 2000, delay: i * 0.5 }); },
+    whistle() { tone(2400, 1.6, { slide: 500, vol: 0.12 }); },
+    gulp() { tone(260, 0.18, { slide: 90, vol: 0.5 }); noise(0.2, { filter: "lowpass", freq: 500, vol: 0.5, delay: 0.05 }); tone(180, 0.2, { slide: 70, vol: 0.4, delay: 0.25 }); },
+    burp() { tone(95, 0.7, { type: "sawtooth", wobble: 22, slide: 70, vol: 0.35, lp: 700 }); },
+    cluck() { for (let i = 0; i < 3; i++) tone(R(700, 900), 0.08, { type: "square", slide: 500, vol: 0.08, lp: 2500, delay: i * 0.14 }); },
+    quack() { tone(560, 0.16, { type: "sawtooth", slide: 380, wobble: 30, vol: 0.12, lp: 1800 }); },
+    fart(p) {
+      const k = p || 1, d = 0.35 + 0.5 * k;
+      tone(R(70, 110), d, { type: "sawtooth", wobble: R(18, 34), slide: R(45, 70), vol: 0.35 * Math.min(1.4, k), lp: 600 + 300 * k, attack: 0.02 });
+      noise(d, { brown: true, filter: "lowpass", freq: 350, vol: 0.6 * Math.min(1.4, k), attack: 0.02 });
+    },
+    sparkle() { [1568, 2093, 2637, 3136].forEach((f, i) => tone(f, 0.3, { type: "triangle", vol: 0.08, delay: i * 0.06 })); },
+    swell() { noise(1.2, { filter: "bandpass", freq: 300, slide: 3000, vol: 0.35, attack: 1 }); },
+    toot(f) { tone(f || 180, 0.28, { type: "sawtooth", wobble: 26, vol: 0.28, lp: 900, attack: 0.02 }); noise(0.26, { brown: true, filter: "lowpass", freq: 300, vol: 0.4, attack: 0.02 }); },
+    piano() { [131, 139, 185, 196, 262, 277, 370, 392, 523].forEach((f) => tone(f, 1.6, { type: "triangle", vol: 0.12, delay: R(0, 0.03) })); SFX.wood(); SFX.thud(10); },
+    click() { tone(1800, 0.03, { type: "square", vol: 0.12, lp: 4000 }); tone(600, 0.05, { vol: 0.2, delay: 0.02 }); },
+    sting() { [220, 207, 196].forEach((f, i) => tone(f, 0.9, { type: "sawtooth", vol: 0.1, lp: 1100, delay: i * 0.22 })); tone(55, 1.4, { vol: 0.6, delay: 0.5 }); }
   };
 
   A.play = function (name, p) {
@@ -257,6 +284,17 @@
   A.setAmbience = function (on) {
     A.ambience = on;
     if (ambBus) ambBus.gain.setTargetAtTime(on ? 0.4 : 0, ctx.currentTime, 0.1);
+  };
+
+  /* ---------- the deep announcer voice (fatality mode) ---------- */
+  A.announce = function (text) {
+    if (!A.voice || !("speechSynthesis" in window)) return;
+    try {
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.pitch = 0.1; u.rate = 0.72; u.volume = 1;
+      speechSynthesis.speak(u);
+    } catch (e) {}
   };
 
   /* ---------- voice lines (browser speech, high & silly) ---------- */

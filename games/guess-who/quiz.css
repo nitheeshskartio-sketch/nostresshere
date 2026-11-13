@@ -134,3 +134,4 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
   .card .ci { font-size: 1.6rem; }
   .home-grid { grid-template-columns: 1fr 1fr; }
 }
+.dpick { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 14px; }

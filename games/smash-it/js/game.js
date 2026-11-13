@@ -44,7 +44,11 @@
   world.setEnvironment(prefs.env);
   const brutal = new S.Brutal(world, buddy, tools);
   S.brutal = brutal;
-  S.game = { world, face, buddy, tools, brutal };
+  const arena = new S.Arena(world, buddy, tools);
+  S.arena = arena;
+  const fatal = new S.Fatality(world, buddy, face);
+  S.fatal = fatal;
+  S.game = { world, face, buddy, tools, brutal, arena, fatal };
   $("loading").hidden = true;
 
   /* ---------- toast ---------- */
@@ -62,6 +66,7 @@
   const unlocked = (t) => prefs.violence === "brutal" || S.toolSet(t) === "brutal" || prefs.unlockAll || prefs.totalHits >= t.unlock;
   // Normal mode and Brutal mode each have their own objects (sponge & water work in both)
   const inMode = (t) => { const s = S.toolSet(t); return prefs.violence === "brutal" || s === "both" || s === "normal"; };
+  S.bus.on("toast", (m) => toast(m, 3400));
   S.bus.on("gibbed", () => toast("💥 Total wipeout! Tap 🩹 Patch up to put them back together.", 3500));
   const visibleTools = () => S.TOOLS.filter(inMode);
   let current = S.toolById(prefs.violence === "brutal" ? prefs.toolBrutal : prefs.tool) || visibleTools()[0];
@@ -102,7 +107,7 @@
       const off = el.getBoundingClientRect().left - tray.getBoundingClientRect().left;
       tray.scrollTo({ left: tray.scrollLeft + off - (tray.clientWidth - el.offsetWidth) / 2, behavior: "smooth" });
     }
-    $("hint").textContent = t.kind === "saw" ? "Hold on the buddy to cut · " + (t.variant === "chainsaw" ? "chainsaws are even faster" : "an arm or leg takes about a second") : t.cut ? "Click to slash · cuts bleed and limbs come off fast" : t.kind === "gun" ? "Click to shoot · hold for rapid fire · headshots hurt more" : t.kind === "place" ? "Click the floor to place a gas cylinder · set it on fire or shoot it" : t.fluid === "petrol" ? "Hold to pour petrol · then throw a 🔥 Fire Stick" : t.kind === "drop" ? "Click anywhere to drop the anvil on their head" : t.kind === "spray" ? "Hold to spray water · it washes off the mess" : t.kind === "throw" ? "Click to throw · hold to keep throwing · drag the buddy to toss them" : "Click the buddy to " + (t.id === "slap" ? "slap" : "hit") + " · drag them to throw";
+    $("hint").textContent = t.kind === "wreck" ? "Click the buddy (or anything) to swing the wrecking ball at it" : t.kind === "saw" ? "Hold on the buddy to cut · " + (t.variant === "chainsaw" ? "chainsaws are even faster" : "an arm or leg takes about a second") : t.cut ? "Click to slash · cuts bleed and limbs come off fast" : t.kind === "gun" ? "Click to shoot · hold for rapid fire · headshots hurt more" : t.kind === "place" ? "Click the floor to place a gas cylinder · set it on fire or shoot it" : t.fluid === "petrol" ? "Hold to pour petrol · then throw a 🔥 Fire Stick" : t.kind === "drop" ? "Click anywhere to drop the anvil on their head" : t.kind === "spray" ? "Hold to spray water · it washes off the mess" : t.kind === "throw" ? "Click to throw · hold to keep throwing · drag the buddy to toss them" : "Click the buddy to " + (t.id === "slap" ? "slap" : "hit") + " · drag them to throw";
   }
 
   function checkUnlocks(before) {
@@ -194,6 +199,7 @@
 
   canvas.addEventListener("pointerdown", (e) => {
     S.audio.unlock();
+    if (fatal.playing) return; // the cinematic is in charge
     if (e.button !== undefined && e.button > 0) return;
     e.preventDefault();
     try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
@@ -205,6 +211,7 @@
       return;
     }
     const ch = ray.intersectObjects(buddy.hitMeshes, false)[0];
+    if (current.kind === "wreck") { arena.swing(ch ? ch.point.clone() : aimPoint(ray)); down = Object.assign(base, { mode: "none" }); hideHint(); return; }
     if (current.kind === "saw") { down = Object.assign(base, { mode: "saw" }); hideHint(); return; }
     if (current.kind === "gun") { brutal.shoot(ndc.clone()); down = Object.assign(base, { mode: "gun", last: performance.now() }); hideHint(); return; }
     if (current.kind === "place") { brutal.placeGas(aimPoint(ray), !!ch); down = Object.assign(base, { mode: "none" }); hideHint(); return; }
@@ -256,7 +263,7 @@
       else if (current.kind === "throw") tools.throwAt(current, h.point.clone());
       else if (current.kind === "melee") tools.melee(current, { point: h.point.clone(), part: h.object.userData.part, object: h.object });
       hideHint();
-    } else if (d.mode === "grab") buddy.grabRelease();
+    } else if (d.mode === "grab") { if (!arena.dropInto()) buddy.grabRelease(); }
     else if (d.mode === "spray") tools.stopSpray();
   }
   canvas.addEventListener("pointerup", endPointer);
@@ -265,6 +272,7 @@
 
   document.addEventListener("keydown", (e) => {
     if (e.target.closest && e.target.closest("input, textarea, select")) return;
+    if (fatal.playing || !fatal.menuEl.hidden) return;
     if (/^[0-9]$/.test(e.key)) {
       const t = visibleTools()[(+e.key + 9) % 10];
       if (t && unlocked(t)) selectTool(t);
@@ -289,7 +297,8 @@
     const b = e.target.closest(".act"); if (!b) return;
     S.audio.unlock();
     const a = b.dataset.act;
-    if (a === "heal") { tools.clear(); brutal.clear(); buddy.revive(); applyStyle(); world.clearFloor(); S.audio.play("unlock"); toast("🩹 All patched up. Good as new. Mostly."); }
+    if (fatal.playing) fatal.stop();
+    if (a === "heal") { arena.busy = null; arena.override = null; tools.clear(); brutal.clear(); buddy.revive(); applyStyle(); world.clearFloor(); S.audio.play("unlock"); toast("🩹 All patched up. Good as new. Mostly."); }
     else if (a === "clean") { buddy.cleanAll(); world.clearFloor(); S.audio.play("splash"); toast("🧼 Squeaky clean. For now."); }
     else if (a === "slowmo") { world.slowT = 3.2; toast("🐢 Slooooow mooootion…"); }
     else { buddy.action(a); if (a === "launch") S.bus.emit("fall", {}); }
@@ -299,6 +308,7 @@
   /* =========================================================
      TOP BAR BUTTONS
      ========================================================= */
+  S.applyStyle = () => applyStyle();
   function applyStyle() { buddy.setStyle(prefs.style); $("styleBtn").title = prefs.style === "toon" ? "Style: Cartoon" : "Style: Realistic"; $("styleBtn").classList.toggle("on", prefs.style === "toon"); }
   $("styleBtn").addEventListener("click", () => { prefs.style = prefs.style === "toon" ? "real" : "toon"; save(); applyStyle(); toast(prefs.style === "toon" ? "🖍️ Cartoon style" : "📸 Realistic style"); });
   applyStyle();
@@ -314,7 +324,8 @@
   renderSound();
 
   function resetAll() {
-    tools.clear(); brutal.clear(); buddy.restore(); applyStyle(); buddy.reset(); world.spawnProps(); world.clearFloor();
+    if (fatal.playing) fatal.stop();
+    tools.clear(); brutal.clear(); arena.clearFx(); arena.busy = null; arena.override = null; buddy.restore(); applyStyle(); buddy.reset(); world.spawnProps(); world.clearFloor();
     for (const k in world.fx) world.fx[k].clear();
     toast("↺ Fresh start! Like nothing ever happened.");
   }
@@ -356,6 +367,7 @@
   /* ---------- face upload ---------- */
   let photoImg = null;
   function renderFacePanel(el) {
+    if (modes.current === "fatal") el.appendChild(h('<p class="privacy">💀 <b>Fatality Mode always uses the drawn face.</b> Your photo comes back when you leave this mode.</p>'));
     if (prefs.violence === "brutal") {
       el.appendChild(h('<p class="privacy">😈 <b>Pick a cartoon face for Brutal mode.</b> Real photos stay in Normal mode — nobody\'s actual face gets the gore treatment.</p>'));
       const wrap = h('<div class="face-edit"><canvas id="facePrev" width="240" height="240" aria-label="Face preview"></canvas></div>');
@@ -492,10 +504,11 @@
   /* ---------- room ---------- */
   function renderRoomPanel(el) {
     const grid = h('<div class="cards"></div>');
-    Object.entries(S.ENVS).forEach(([id, e]) => {
+    Object.entries(S.ENVS).filter(([, e]) => !e.hidden).forEach(([id, e]) => {
       const b = h('<button type="button" class="card wide' + (prefs.env === id ? " active" : "") + '"><span class="ci">' + e.icon + "</span><span><b>" + e.name + "</b><small>" + e.desc + "</small></span></button>");
       b.addEventListener("click", () => {
         prefs.env = id; save();
+        if (MODES[modes.current] && (MODES[modes.current].arena || MODES[modes.current].fatal)) modes.enter("free");
         tools.clear(); world.clearTargets(); world.setEnvironment(id); buddy.reset();
         if (modes.current === "target") modes.enter("target");
         const n = panelName; panelName = null; openPanel(n);
@@ -535,8 +548,37 @@
     timed: { name: "60-Second Stress Relief", icon: "⏱️", desc: "How much stress can you release in one minute?" },
     chaos: { name: "Chaos Mode", icon: "🌪️", desc: "Low gravity, triple throws, stuff rains from the sky." },
     target: { name: "Target Mode", icon: "🎯", desc: "Hit the floating targets with anything. Even the buddy." },
-    challenge: { name: "Funny Challenges", icon: "🃏", desc: "Silly little missions, one after another." }
+    challenge: { name: "Funny Challenges", icon: "🃏", desc: "Silly little missions, one after another." },
+    wreck: { name: "Wrecking Ball Madness", icon: "⚫", desc: "Swing a giant wrecking ball through walls, furniture… and the buddy.", arena: true },
+    torture: { name: "Dummy Factory", icon: "🏭", desc: "Drag the person into the press, rollers, crusher, boiling water or the toxic vat.", arena: true },
+    apoc: { name: "Apocalypse Mode", icon: "☄️", desc: "Meteors, earthquakes, tornadoes, a tsunami and shockwaves on a tiny city.", arena: true },
+    fatal: { name: "Fatality Mode", icon: "💀", desc: "Pick a cinematic finishing move — " + S.Fatality.LIST.length + " of them — and watch it play out.", fatal: true }
   };
+  // buttons shown in the mode HUD for each arena mode
+  const ARENA_BTNS = {
+    wreck: () => [["swing", "⚫ Swing at them!"], ["swingRand", "🧱 Smash the walls"], ["rebuild", "↺ Rebuild yard"]],
+    torture: () => [["press", "🗜️ Press"], ["rollers", "🌀 Rollers"], ["crusher", "🧱 Padded crusher"], ["boil", "♨️ Boiling water"], prefs.violence === "brutal" ? ["acid", "🧪 Acid vat"] : ["slime", "🟢 Slime vat"], ["bounce", "🤸 Bounce platform"]],
+    apoc: () => [["meteor", "☄️ Meteor"], ["shower", "🌠 Meteor shower"], ["quake", "🌋 Earthquake"], ["tornado", "🌪️ Tornado"], ["tsunami", "🌊 Tsunami"], ["wave", "💥 Shockwave"], ["city", "↺ Rebuild city"]]
+  };
+  const ARENA_INFO = {
+    wreck: "Or pick the ⚫ ball and click anything. Brutal: walls get painted red.",
+    torture: "✋ <b>Drag the person</b> onto a machine and let go — or tap a button.",
+    apoc: "Brutal mode makes the disasters messier."
+  };
+  function arenaAction(a) {
+    S.audio.unlock();
+    const B = buddy;
+    if (a === "swing") arena.swing(B.gibbed ? new V3(R(-3, 3), 1, -2) : B.com.clone());
+    else if (a === "swingRand") arena.swing(pick([new V3(-3.2, 0.8, -2.3), new V3(0.2, 0.6, -2.6), new V3(2.2, 0.6, -1.9), new V3(3.7, 0.8, -0.6)]));
+    else if (a === "rebuild" || a === "city") { arena.rebuildCity(); }
+    else if (["press", "rollers", "crusher", "boil", "acid", "slime", "bounce"].includes(a)) arena.machine(a);
+    else if (a === "meteor") arena.meteor(Math.random() < 0.5 && !B.gibbed ? B.com.clone().setY(0) : null);
+    else if (a === "shower") arena.meteorShower();
+    else if (a === "quake") arena.earthquake();
+    else if (a === "tornado") arena.twister();
+    else if (a === "wave") arena.shockwave();
+    else if (a === "tsunami") arena.tsunami();
+  }
 
   const CHALLENGES = [
     { text: "Land 3 pies right in the face", need: 3, tool: "pie", on: { splat: (d) => d.type === "cream" && d.face } },
@@ -565,6 +607,32 @@
     enter(id) {
       this.exit();
       this.current = id; this.d = {};
+      if (MODES[id].fatal) {
+        tools.clear(); world.clearTargets();
+        fatal.enter();
+        const hud = $("modeHud"); hud.hidden = false;
+        hud.innerHTML = '<div class="ar-card fatal-card"><div class="ar-title">💀 Fatality Mode</div><div class="ar-btns"><button type="button" data-fa="menu" class="fa-main">☠️ Choose a Fatality</button><button type="button" data-fa="random">🎲 Random</button><button type="button" data-fa="replay">↻ Replay last</button></div><div class="ar-info">Pick a finisher, press <b>EXECUTE</b>, and watch. Between finishers you can still smack them.</div></div>';
+        hud.querySelectorAll("[data-fa]").forEach((b) => b.addEventListener("click", () => {
+          S.audio.unlock();
+          const a = b.dataset.fa;
+          if (a === "menu") fatal.openMenu();
+          else if (a === "random") fatal.random();
+          else if (fatal.last) fatal.execute(fatal.last.id); else fatal.openMenu();
+        }));
+        $("modeName").textContent = MODES[id].name; $("modeIcon").textContent = MODES[id].icon;
+        fatal.openMenu();
+        return;
+      }
+      if (MODES[id].arena) {
+        arena.enter(id);
+        const hud = $("modeHud"); hud.hidden = false;
+        hud.innerHTML = '<div class="ar-card"><div class="ar-title">' + MODES[id].icon + " " + MODES[id].name + '</div><div class="ar-btns">' + ARENA_BTNS[id]().map(([k, l]) => '<button type="button" data-ar="' + k + '">' + l + "</button>").join("") + '</div><div class="ar-info" id="arenaInfo">' + ARENA_INFO[id] + "</div></div>";
+        hud.querySelectorAll("[data-ar]").forEach((b) => b.addEventListener("click", () => arenaAction(b.dataset.ar)));
+        $("modeName").textContent = MODES[id].name; $("modeIcon").textContent = MODES[id].icon;
+        if (id === "wreck") { this.d.prevTool = current; selectTool(S.toolById("wreck")); }
+        toast(MODES[id].icon + " " + MODES[id].name + "!");
+        return;
+      }
       $("modeName").textContent = MODES[id].name;
       $("modeIcon").textContent = MODES[id].icon;
       const hud = $("modeHud");
@@ -590,6 +658,15 @@
       }
     },
     exit() {
+      if (MODES[this.current] && MODES[this.current].fatal) {
+        fatal.exit();
+        world.setEnvironment(prefs.env); tools.clear(); buddy.revive(); applyStyle();
+      }
+      if (MODES[this.current] && MODES[this.current].arena) {
+        arena.exit();
+        world.setEnvironment(prefs.env); tools.clear(); if (buddy.gibbed || buddy.lost.size) { buddy.revive(); applyStyle(); } else buddy.reset();
+        if (this.d.prevTool && current.kind === "wreck" && inMode(this.d.prevTool)) selectTool(this.d.prevTool);
+      }
       if (this.current === "chaos") { world.physics.gravity.y = -9.82; buddy.gravMul = 1; buddy.power = 1; tools.multi = 1; }
       if (this.current === "target") world.clearTargets();
       $("modeHud").hidden = true;
@@ -695,6 +772,11 @@
     el.appendChild(grid);
   }
   $("modeBtn").addEventListener("click", () => openPanel("mode"));
+  $("fatalBtn").addEventListener("click", () => {
+    S.audio.unlock(); closePanel();
+    if (fatal.playing) return;
+    if (modes.current !== "fatal") modes.enter("fatal"); else fatal.openMenu();
+  });
 
   function showModal(html) {
     $("modalCard").innerHTML = html;
@@ -718,7 +800,7 @@
   function setViolence(v) {
     prefs.violence = v; save();
     const brutal = v === "brutal";
-    face.suppress = brutal; face.costume = brutal ? prefs.brutalFace || null : null; face.dirty = true; face.photoDirty = true;
+    face.suppress = brutal || modes.current === "fatal"; face.costume = brutal ? prefs.brutalFace || null : null; face.dirty = true; face.photoDirty = true;
     if (!brutal) { S.brutal.clear(); if (buddy.lost.size) { buddy.revive(); applyStyle(); } }
     buddy.brutal = brutal; buddy.refreshFace();
     document.body.classList.toggle("brutal", brutal);
@@ -727,6 +809,7 @@
     const want = S.toolById(brutal ? prefs.toolBrutal : prefs.tool);
     selectTool(want && inMode(want) && unlocked(want) ? want : visibleTools()[0]);
     if (modes.current === "challenge") modes.nextChallenge();
+    if (modes.current === "torture") { const hud = $("modeHud"); const b = hud.querySelector('[data-ar="acid"],[data-ar="slime"]'); if (b) { b.dataset.ar = brutal ? "acid" : "slime"; b.textContent = brutal ? "🧪 Acid vat" : "🟢 Slime vat"; } }
     if (panelName === "face") { panelName = null; openPanel("face"); }
   }
   $("vNormal").addEventListener("click", () => { if (prefs.violence !== "normal") { setViolence("normal"); toast("😇 Normal mode — pies, pillows and photo faces."); } });
@@ -760,7 +843,10 @@
       tools.throwAt(current, hit ? hit.point.clone() : ray.ray.at(6, new V3()));
     }
     tools.update(dt);
+    arena.update(dt);
+    fatal.update(dt, rdt);
     buddy.update(dt);
+    arena.post(dt);
     brutal.update(dt, rdt);
     world.physics.step(1 / 60, dt, 4);
     tools.postPhysics(dt);

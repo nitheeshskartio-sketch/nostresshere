@@ -67,7 +67,7 @@
     const dailyDone = P.daily[today()];
     show(`<div class="hero">
       <div class="title" aria-label="Guess Who?"><span>G</span><span>U</span><span>E</span><span>S</span><span>S</span> <span>W</span><span>H</span><span>O</span><span class="q">?</span></div>
-      <p class="tag">Movies, stars, heroes & villains. Three clues. One guess. How fast can you get it?</p>
+      <p class="tag">Movies, stars, heroes, countries & cultures. Three clues. One guess. How fast can you get it?</p>
       <div class="chips"><span class="chip">⭐ ${fmt(P.score)} points</span><span class="chip">🎯 ${acc}% accuracy</span><span class="chip">🔥 Daily streak ${P.dailyStreak}</span></div>
       <div class="home-btns">
         <button class="btn primary" data-go="cats" data-mode="classic">▶ Play</button>
@@ -87,8 +87,8 @@
     if (m.lock && m.lock()) { toast("🔒 " + m.lockMsg + " (" + P.correct + "/30)"); return; }
     if (m.flow) ACT.cats({ mode: d.mode });
     else if (d.mode === "daily") ACT.daily();
-    else if (d.mode === "mixed") startGame({ mode: "mixed", pool: G.ALL.slice(), label: "Mixed Categories" });
-    else if (d.mode === "expert") startGame({ mode: "expert", pool: G.ALL.filter((e) => e.diff >= 2), label: "Expert Mode" });
+    else if (d.mode === "mixed") startGame({ mode: "mixed", pool: G.ALL.slice(), label: "Mixed Categories", balanced: true });
+    else if (d.mode === "expert") startGame({ mode: "expert", pool: G.ALL.filter((e) => e.diff >= 3), label: "Expert Mode", balanced: true });
   };
   ACT.cats = function (d) {
     const mode = (d && d.mode) || "classic";
@@ -98,16 +98,22 @@
   ACT.subs = function (d) {
     const c = G.catById(d.cat), subs = G.subsOf(d.cat), mode = d.mode || "classic";
     const all = G.ALL.filter((e) => e.cat === c.id);
-    const stars = (items) => { const a = items.reduce((s, e) => s + e.diff, 0) / items.length; return "★".repeat(Math.round(a)) + "☆".repeat(3 - Math.round(a)); };
+    const stars = (items) => { const a = Math.max(1, Math.min(4, Math.round(items.reduce((s, e) => s + e.diff, 0) / items.length))); return "★".repeat(a) + "☆".repeat(4 - a); };
+    const lv = P.diffPick || 0;
+    const dpick = `<div class="dpick" role="group" aria-label="Difficulty">${["Any difficulty"].concat(G.DIFF).map((n, i) => `<button class="tab ${lv === i ? "on" : ""}" data-go="setdiff" data-v="${i}" data-cat="${c.id}" data-mode="${mode}">${n}</button>`).join("")}</div>`;
     show(`<button class="btn small ghost back" data-go="cats" data-mode="${mode}">← Categories</button>
       <div class="sub-head"><span class="ci">${c.icon}</span><div><h2 class="screen-title">${c.name}</h2><small class="muted">${MODES[mode].name} · pick a subcategory</small></div></div>
+      ${dpick}
       <div class="grid">${subs.map((s) => { const solved = s.items.filter((e) => P.solved[e.id]).length; return `<button class="card" style="--c:${c.color}" data-go="start" data-cat="${c.id}" data-sub="${s.id}" data-mode="${mode}"><span class="ci">${s.icon}</span><b>${s.name}</b><small>${s.items.length} answers · <span class="diff" title="Difficulty">${stars(s.items)}</span></small><div class="progress"><i style="width:${(solved / s.items.length) * 100}%"></i></div><small>${solved}/${s.items.length} solved</small></button>`; }).join("")}
         <button class="card" style="--c:${c.color}" data-go="start" data-cat="${c.id}" data-sub="*" data-mode="${mode}"><span class="ci">🎲</span><b>All ${c.name}</b><small>${all.length} answers, every subcategory mixed</small><span class="diff">${stars(all)}</span></button></div>`);
   };
+  ACT.setdiff = function (d) { P.diffPick = +d.v || 0; save(); ACT.subs({ cat: d.cat, mode: d.mode }); };
   ACT.start = function (d) {
     const c = G.catById(d.cat);
-    const pool = d.sub === "*" ? G.ALL.filter((e) => e.cat === d.cat) : G.subById(d.cat, d.sub).items.slice();
-    const label = c.name + (d.sub === "*" ? "" : " › " + G.subById(d.cat, d.sub).name);
+    let pool = d.sub === "*" ? G.ALL.filter((e) => e.cat === d.cat) : G.subById(d.cat, d.sub).items.slice();
+    const lv = P.diffPick || 0;
+    if (lv) { const f = pool.filter((e) => e.diff === lv); if (f.length >= 5) pool = f; else toast("Not enough " + G.DIFF[lv - 1] + " questions here — mixing difficulties"); }
+    const label = c.name + (d.sub === "*" ? "" : " › " + G.subById(d.cat, d.sub).name) + (lv && pool.every((e) => e.diff === lv) ? " · " + G.DIFF[lv - 1] : "");
     startGame({ mode: d.mode || "classic", pool, label, cat: d.cat, sub: d.sub });
   };
   ACT.daily = function () {
@@ -115,7 +121,9 @@
     if (P.daily[day]) { toast("You've done today's challenge — come back tomorrow!"); return ACT.dailyResult(); }
     // one question from each category, picked by the date so everyone gets the same set
     const r = G.rng(G.hash("daily-" + day));
-    const pool = G.CATS.map((c) => { const items = G.ALL.filter((e) => e.cat === c.id); return items[Math.floor(r() * items.length)]; });
+    const cats = G.CATS.slice();
+    for (let i = cats.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [cats[i], cats[j]] = [cats[j], cats[i]]; }
+    const pool = cats.slice(0, 10).map((c) => { const items = G.ALL.filter((e) => e.cat === c.id); return items[Math.floor(r() * items.length)]; });
     startGame({ mode: "daily", pool, fixed: true, label: "Daily Challenge · " + day, seed: G.hash("clues-" + day) });
   };
   ACT.dailyResult = function () {
@@ -138,6 +146,14 @@
   // avoid repeating recent answers: prefer ones not seen lately
   function pickEntry() {
     if (S.fixed) return S.pool[S.q];
+    // mixed modes: pick a category first so big categories (like countries) don't crowd out the rest
+    if (S.balanced) {
+      const cats = [...new Set(S.pool.map((e) => e.cat))], cat = cats[Math.floor(Math.random() * cats.length)];
+      const recentB = new Set(P.seen.slice(-80));
+      let cb = S.pool.filter((e) => e.cat === cat && !S.asked.has(e.id) && !recentB.has(e.id));
+      if (!cb.length) cb = S.pool.filter((e) => e.cat === cat && !S.asked.has(e.id));
+      if (cb.length) return cb[Math.floor(Math.random() * cb.length)];
+    }
     const recent = new Set(P.seen.slice(-80));
     let cand = S.pool.filter((e) => !S.asked.has(e.id) && !recent.has(e.id));
     if (!cand.length) cand = S.pool.filter((e) => !S.asked.has(e.id));
@@ -161,7 +177,7 @@
     const info = S.mode === "timed" ? `<span class="stat ${S.time <= 10 ? "warn" : ""}" id="timeStat">⏱️ ${S.time}s</span>` : S.mode === "endless" ? `<span class="stat">${"❤️".repeat(S.lives)}${"🖤".repeat(3 - S.lives)}</span>` : `<span class="stat">Q ${S.q}/${S.total}</span>`;
     show(`<div class="gbar"><div class="crumbs"><b>${c.icon} ${c.name}</b> › ${sub.icon} ${esc(sub.name)}${S.label && !S.cat ? " · " + esc(S.label) : ""}</div><div class="stats">${info}<span class="stat">⭐ ${fmt(S.score)}</span>${S.streak > 1 ? `<span class="stat">🔥 ${S.streak}</span>` : ""}</div></div>
       <div class="qcard" style="--c:${c.color}">
-        <div class="qhead"><h1>${c.ask}</h1><span class="worth ${worth < 75 * mult() ? "w50" : worth < 100 * mult() ? "w75" : ""}" id="worth">Worth ${worth}</span></div>
+        <div class="qhead"><h1>${sub.ask || c.ask}</h1><span class="worth ${worth < 75 * mult() ? "w50" : worth < 100 * mult() ? "w75" : ""}" id="worth">Worth ${worth}</span></div>
         <div class="clues">${[0, 1, 2].map((i) => i < shown ? `<div class="clue ${fresh && i === shown - 1 ? "new" : ""}"><span class="n">${i + 1}</span><span>${esc(clues[i])}</span></div>` : `<div class="clue hidden"><span class="n">${i + 1}</span><span>Clue ${i + 1} is hidden — revealing it lowers the score to ${Math.round(POINTS[i] * mult())}</span></div>`).join("")}</div>
         <div id="zone">
           <form class="answer" id="ansForm" autocomplete="off"><input id="ans" type="text" placeholder="Type your answer…" aria-label="Your answer" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="80"><button class="btn primary" type="submit">Submit</button></form>
